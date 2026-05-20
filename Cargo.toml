@@ -1,0 +1,20 @@
+[package]
+name = "commerce-rs"
+version = "0.1.0"
+edition = "2024"
+description = "Runtime Rust mirror of the CommerceTheory Lean package"
+license = "MIT"
+
+[lib]
+name = "commerce_theory"
+path = "src/lib.rs"
+
+[features]
+default = []
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"], optional = true }
+
+[dev-dependencies]
+serde_json = "1"
