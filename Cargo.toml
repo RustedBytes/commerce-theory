@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Runtime Rust mirror of the CommerceTheory Lean package"
 license = "MIT"
+authors = ["Yehor Smoliakov <egorsmkv@gmail.com>"]
 
 [lib]
 name = "commerce_theory"
