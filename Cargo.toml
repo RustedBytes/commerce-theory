@@ -1,5 +1,5 @@
 [package]
-name = "commerce-rs"
+name = "commerce-theory"
 version = "0.1.0"
 edition = "2024"
 description = "Runtime Rust mirror of the CommerceTheory Lean package"
