@@ -193,6 +193,11 @@ mod tests {
             .collect();
         assert!(order_event_word_accepted(&symbols));
         assert!(order_event_validator().accepts(&symbols));
+        assert!(!order_event_word_accepted(&[]));
+        assert!(!order_event_validator().accepts(&[
+            OrderEventSymbol::OrderPlaced,
+            OrderEventSymbol::PaymentCaptured,
+        ]));
 
         let states = execute_order_trace(OrderStatus::New, &paid_fulfillment_trace()).unwrap();
         assert_eq!(states.last(), Some(&OrderStatus::Delivered));
@@ -285,7 +290,9 @@ mod tests {
             status: OrderStatus::New,
             total: 4_350,
         };
-        assert_eq!(validate_order(raw_order.clone()).unwrap().total(), 4_350);
+        let validated_order = validate_order(raw_order.clone()).unwrap();
+        assert_eq!(validated_order.total(), 4_350);
+        assert!(order_matches_raw(&raw_order, &validated_order));
         assert_eq!(
             validate_order(RawOrder {
                 total: 4_351,
@@ -297,10 +304,19 @@ mod tests {
         assert_eq!(
             validate_order(RawOrder {
                 shipping_method: ShippingMethod::new(500, 10_000, 5),
-                ..raw_order
+                ..raw_order.clone()
             })
             .unwrap_err(),
             ValidationError::ShippingUnavailable
+        );
+        assert_eq!(
+            validate_order(RawOrder {
+                coupon_amount: 5_000,
+                total: 0,
+                ..raw_order
+            })
+            .unwrap_err(),
+            ValidationError::CouponExceedsSubtotal
         );
 
         let raw_stock = RawStockState {
@@ -560,26 +576,101 @@ mod tests {
                 fulfillment.clone(),
                 quote.clone(),
                 warehouse.clone(),
-                1,
-                12_345,
+                destination.clone(),
                 epoch(),
                 epoch(),
             )
             .is_ok()
         );
+        assert!(
+            validate_logistics_shipment_plan(
+                ShipmentId::new(2),
+                paid_order(),
+                fulfillment.clone(),
+                quote.clone(),
+                warehouse.clone(),
+                ShippingDestination::new(2, ShippingZone::new(99, "remote".to_owned()), 99_999),
+                epoch(),
+                epoch(),
+            )
+            .is_err()
+        );
         let plan = LogisticsShipmentPlan::try_new(
             ShipmentId::new(1),
             paid_order(),
             fulfillment,
-            package,
-            quote,
-            warehouse,
-            destination,
+            package.clone(),
+            quote.clone(),
+            warehouse.clone(),
+            destination.clone(),
             epoch(),
             epoch(),
         )
         .unwrap();
         assert!(validate_carrier_handoff(plan, 9_001, epoch(), epoch()).is_ok());
+
+        let sku_a = Sku::new(101);
+        let sku_b = Sku::new(102);
+        let mixed_items = vec![
+            CartLine::try_new(sku_a, 100, 10, 2, 0, 1).unwrap(),
+            CartLine::try_new(sku_b, 100, 10, 1, 0, 1).unwrap(),
+        ];
+        let mixed_total = order_total(&shipping(), 0, 0, &mixed_items).unwrap();
+        let mixed_order = Order::try_new(
+            OrderId::new(90),
+            mixed_items,
+            0,
+            shipping(),
+            0,
+            Currency::USD,
+            OrderStatus::Paid,
+            mixed_total,
+        )
+        .unwrap();
+        let mixed_allocations = vec![
+            Allocation::try_new(
+                InventoryNode::new(
+                    warehouse.clone(),
+                    StockState::try_new(sku_a, 10, 0).unwrap(),
+                ),
+                1,
+            )
+            .unwrap(),
+            Allocation::try_new(
+                InventoryNode::new(
+                    warehouse.clone(),
+                    StockState::try_new(sku_b, 10, 0).unwrap(),
+                ),
+                2,
+            )
+            .unwrap(),
+        ];
+        let mixed_fulfillment = DistinctFulfillmentPlan::try_new(3, mixed_allocations).unwrap();
+        assert!(allocations_match_cart_skus(
+            mixed_order.items(),
+            mixed_fulfillment.allocations()
+        ));
+        assert!(
+            !allocation_quantities_match_cart_skus(
+                mixed_order.items(),
+                mixed_fulfillment.allocations()
+            )
+            .unwrap()
+        );
+        assert!(
+            LogisticsShipmentPlan::try_new(
+                ShipmentId::new(91),
+                mixed_order,
+                mixed_fulfillment,
+                package,
+                quote,
+                warehouse,
+                destination,
+                epoch(),
+                epoch(),
+            )
+            .is_err()
+        );
         assert!(
             WarehouseTransfer::try_new(
                 TransferId::new(1),

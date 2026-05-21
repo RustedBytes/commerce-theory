@@ -25,8 +25,25 @@ pub fn validate_cart_line(raw: RawCartLine) -> Result<CartLine, ValidationError>
     .map_err(|_| ValidationError::LineDiscountExceedsGross)
 }
 
+pub fn cart_line_matches_raw(raw: &RawCartLine, line: &CartLine) -> bool {
+    *line.sku() == raw.sku
+        && *line.price() == raw.price
+        && *line.cost() == raw.cost
+        && line.quantity() == raw.quantity
+        && *line.discount() == raw.discount
+        && *line.weight() == raw.weight
+}
+
 pub fn validate_cart_lines(raw: Vec<RawCartLine>) -> Result<Vec<CartLine>, ValidationError> {
     raw.into_iter().map(validate_cart_line).collect()
+}
+
+pub fn cart_lines_match_raw(raw: &[RawCartLine], lines: &[CartLine]) -> bool {
+    raw.len() == lines.len()
+        && raw
+            .iter()
+            .zip(lines)
+            .all(|(raw, line)| cart_line_matches_raw(raw, line))
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,6 +61,9 @@ pub struct RawOrder {
 
 pub fn validate_order(raw: RawOrder) -> Result<Order, ValidationError> {
     let items = validate_cart_lines(raw.items)?;
+    if raw.coupon_amount > cart_net_total(&items)? {
+        return Err(ValidationError::CouponExceedsSubtotal);
+    }
     if !shipping_available(&raw.shipping_method, cart_weight_total(&items)?) {
         return Err(ValidationError::ShippingUnavailable);
     }
@@ -61,6 +81,17 @@ pub fn validate_order(raw: RawOrder) -> Result<Order, ValidationError> {
         raw.status,
         raw.total,
     )
+}
+
+pub fn order_matches_raw(raw: &RawOrder, order: &Order) -> bool {
+    order.id() == raw.id
+        && cart_lines_match_raw(&raw.items, order.items())
+        && *order.coupon_amount() == raw.coupon_amount
+        && order.shipping_method() == &raw.shipping_method
+        && order.tax() == raw.tax
+        && order.currency() == raw.currency
+        && order.status() == &raw.status
+        && order.total() == raw.total
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1312,14 +1343,11 @@ pub fn validate_logistics_shipment_plan(
     fulfillment: DistinctFulfillmentPlan,
     quote: CarrierQuote,
     warehouse: Warehouse,
-    destination_id: Id,
-    postal_code: Nat,
+    destination: ShippingDestination,
     planned_ship_at: Timestamp,
     promised_delivery_at: Timestamp,
 ) -> Result<LogisticsShipmentPlan, ValidationError> {
     let package = quote.package().clone();
-    let destination =
-        ShippingDestination::new(destination_id, quote.service().zone().clone(), postal_code);
     LogisticsShipmentPlan::try_new(
         id,
         order,

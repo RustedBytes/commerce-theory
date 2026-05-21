@@ -80,7 +80,10 @@ pub fn validate_order_event_symbols(symbols: &[OrderEventSymbol]) -> OrderEventV
 }
 
 pub fn order_event_word_accepted(symbols: &[OrderEventSymbol]) -> bool {
-    validate_order_event_symbols(symbols) != OrderEventValidationState::Invalid
+    matches!(
+        validate_order_event_symbols(symbols),
+        OrderEventValidationState::Shipped | OrderEventValidationState::Refunded
+    )
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

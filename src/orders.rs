@@ -40,6 +40,9 @@ impl Order {
         status: OrderStatus,
         total: Money,
     ) -> DomainResult<Self> {
+        if coupon_amount > cart_net_total(&items)? {
+            return Err(ValidationError::CouponExceedsSubtotal);
+        }
         if !shipping_available(&shipping_method, cart_weight_total(&items)?) {
             return Err(ValidationError::Invariant(
                 "shipping method cannot carry cart",

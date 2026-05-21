@@ -60,6 +60,72 @@ pub fn allocations_match_cart_skus(items: &[CartLine], allocations: &[Allocation
         .all(|allocation| cart_contains_sku(allocation.node.stock.sku, items))
 }
 
+pub fn cart_sku_quantity_total(sku: Sku, items: &[CartLine]) -> DomainResult<Quantity> {
+    checked_sum(
+        items
+            .iter()
+            .filter(|line| *line.sku() == sku)
+            .map(CartLine::quantity),
+        "cart_sku_quantity_total",
+    )
+}
+
+pub fn allocation_sku_quantity_total(
+    sku: Sku,
+    allocations: &[Allocation],
+) -> DomainResult<Quantity> {
+    checked_sum(
+        allocations
+            .iter()
+            .filter(|allocation| allocation.node.stock.sku == sku)
+            .map(|allocation| allocation.quantity),
+        "allocation_sku_quantity_total",
+    )
+}
+
+pub fn cart_sku_support(items: &[CartLine]) -> Vec<Sku> {
+    items.iter().map(|line| *line.sku()).collect()
+}
+
+pub fn allocation_sku_support(allocations: &[Allocation]) -> Vec<Sku> {
+    allocations
+        .iter()
+        .map(|allocation| allocation.node.stock.sku)
+        .collect()
+}
+
+pub fn shipment_sku_quantity_support(items: &[CartLine], allocations: &[Allocation]) -> Vec<Sku> {
+    let mut support = cart_sku_support(items);
+    support.extend(allocation_sku_support(allocations));
+    support
+}
+
+pub fn shipment_sku_quantities_match_keys(
+    items: &[CartLine],
+    allocations: &[Allocation],
+    keys: &[Sku],
+) -> DomainResult<bool> {
+    for sku in keys {
+        if cart_sku_quantity_total(*sku, items)?
+            != allocation_sku_quantity_total(*sku, allocations)?
+        {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+pub fn allocation_quantities_match_cart_skus(
+    items: &[CartLine],
+    allocations: &[Allocation],
+) -> DomainResult<bool> {
+    shipment_sku_quantities_match_keys(
+        items,
+        allocations,
+        &shipment_sku_quantity_support(items, allocations),
+    )
+}
+
 pub fn allocations_use_warehouse(warehouse: &Warehouse, allocations: &[Allocation]) -> bool {
     allocations
         .iter()
@@ -100,6 +166,9 @@ impl LogisticsShipmentPlan {
             return Err(ValidationError::LogisticsInvariantFailed);
         }
         if !allocations_match_cart_skus(order.items(), fulfillment.allocations()) {
+            return Err(ValidationError::LogisticsInvariantFailed);
+        }
+        if !allocation_quantities_match_cart_skus(order.items(), fulfillment.allocations())? {
             return Err(ValidationError::LogisticsInvariantFailed);
         }
         if !allocations_use_warehouse(&warehouse, fulfillment.allocations()) {
