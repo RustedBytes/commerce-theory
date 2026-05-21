@@ -57,6 +57,7 @@ pub struct GuaranteedDropshipProfitQuote {
     pub(crate) costs: DropshipProfitCosts,
     pub(crate) min_profit: Money,
     pub(crate) profit: Money,
+    pub(crate) signed_profit: SignedMoney,
 }
 
 impl GuaranteedDropshipProfitQuote {
@@ -65,10 +66,14 @@ impl GuaranteedDropshipProfitQuote {
         costs: DropshipProfitCosts,
         min_profit: Money,
         profit: Money,
+        signed_profit: SignedMoney,
     ) -> DomainResult<Self> {
         let costs_total = dropship_profit_costs_total(&costs)?;
         if profit != profit_amount(revenue, costs_total) {
             return Err(ValidationError::Invariant("profit is incorrect"));
+        }
+        if signed_profit != profit_loss_amount(revenue, costs_total)? {
+            return Err(ValidationError::Invariant("signed profit is incorrect"));
         }
         if checked_add(costs_total, min_profit, "guaranteed quote")? > revenue {
             return Err(ValidationError::Invariant(
@@ -80,6 +85,7 @@ impl GuaranteedDropshipProfitQuote {
             costs,
             min_profit,
             profit,
+            signed_profit,
         })
     }
 }
@@ -136,13 +142,7 @@ pub fn profit_after_ad_spend(
 }
 
 pub fn profit_loss_int(revenue: Money, total_costs: Money) -> DomainResult<i128> {
-    let revenue = i128::try_from(revenue)
-        .map_err(|_| ValidationError::Overflow("profit_loss_int revenue"))?;
-    let total_costs = i128::try_from(total_costs)
-        .map_err(|_| ValidationError::Overflow("profit_loss_int total costs"))?;
-    revenue
-        .checked_sub(total_costs)
-        .ok_or(ValidationError::Overflow("profit_loss_int subtraction"))
+    profit_loss_amount(revenue, total_costs)
 }
 
 pub(crate) fn _dropshipping_anchor(_: Option<DropshipPOStatus>) {}
@@ -152,6 +152,7 @@ impl_getters!(GuaranteedDropshipProfitQuote {
     costs: DropshipProfitCosts,
     min_profit: Money,
     profit: Money,
+    signed_profit: SignedMoney,
 });
 
 impl_getters!(DropshipCostUpperBounds {

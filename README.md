@@ -15,6 +15,10 @@ The crate covers e-commerce and marketplace invariants across:
 - marketplace listings, feeds, payouts, marketing, B2B, and wholesale credit
 - dropshipping, supplier capacity, purchase orders, returns, and profit floors
 - competitor pricing, merchandising, fulfillment finance, risk, and privacy
+- CRM accounts, contacts, leads, opportunities, segments, and support cases
+- logistics shipment plans, tracking, warehouse transfers, and returns
+- tax treatments, invoices, exemptions, and marketplace facilitator tax
+- raw input validation helpers that compose the smart constructors
 - event sourcing, event validation, replay, workflows, keyed totals, and ranking
 
 All modules are re-exported from the library root:
@@ -35,14 +39,20 @@ Lean proof fields are represented as runtime validation:
 - natural-number subtraction uses saturating subtraction to match Lean `Nat`
   subtraction flooring at zero.
 
-The crate uses `u128` aliases for Lean `Nat`-style quantities:
+The crate uses `u128` aliases for Lean `Nat`-style quantities and `time` types
+for timestamps and durations:
 
 ```rust
-pub type Money = u128;
+pub type MinorUnit = u128;
+pub type NonNegMoney = MinorUnit;
+pub type Money = NonNegMoney;
+pub type SignedMoney = i128;
 pub type Quantity = u128;
 pub type Weight = u128;
-pub type Timestamp = u128;
-pub type Days = u128;
+pub type Timestamp = time::PrimitiveDateTime;
+pub type Date = time::Date;
+pub type Duration = time::Duration;
+pub type Days = Duration;
 pub type Id = u128;
 ```
 
@@ -103,6 +113,8 @@ cargo doc --all-features --no-deps
 - `src/accounting.rs`, `src/marketplace.rs`, `src/marketing.rs`, `src/b2b.rs`
 - `src/dropshipping.rs`, `src/dropship_profit.rs`, `src/competitor_pricing.rs`
 - `src/merchandising.rs`, `src/fulfillment_finance.rs`, `src/risk_privacy.rs`
+- `src/basic.rs`, `src/crm.rs`, `src/logistics.rs`, `src/tax.rs`,
+  `src/validation.rs`
 - `src/event_sourcing.rs`, `src/event_language.rs`, `src/event_replay.rs`
 - `src/post_purchase.rs`, `src/forecasting.rs`, `src/implicit_invariants.rs`
 - `src/inventory_algorithms.rs`, `src/keyed_totals.rs`,

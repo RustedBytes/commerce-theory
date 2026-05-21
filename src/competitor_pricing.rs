@@ -18,8 +18,8 @@ pub fn competitor_offer_relevant(offer: &CompetitorOffer, sku: Sku, currency: Cu
     offer.sku == sku && offer.currency == currency && offer.active && offer.in_stock
 }
 
-pub fn price_snapshot_fresh(now: Timestamp, max_age: Timestamp, observed_at: Timestamp) -> bool {
-    observed_at <= now && now - observed_at <= max_age
+pub fn price_snapshot_fresh(now: Timestamp, max_age: Duration, observed_at: Timestamp) -> bool {
+    observed_at <= now && timestamp_age(now, observed_at) <= max_age
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

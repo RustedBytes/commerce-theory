@@ -2,11 +2,13 @@ use crate::accounting::*;
 use crate::b2b::*;
 use crate::catalog::*;
 use crate::competitor_pricing::*;
+use crate::crm::*;
 use crate::dropshipping::*;
 use crate::event_sourcing::*;
 use crate::forecasting::*;
 use crate::foundation::*;
 use crate::fulfillment_finance::*;
+use crate::logistics::*;
 use crate::marketplace::*;
 use crate::merchandising::*;
 use crate::opportunity_portfolio::*;
@@ -306,7 +308,7 @@ impl WholesaleCreditCheckout {
 pub struct TrustedFreshCompetitorBenchmark {
     pub(crate) benchmark: CompetitorPriceBenchmark,
     pub(crate) now: Timestamp,
-    pub(crate) max_age: Timestamp,
+    pub(crate) max_age: Duration,
     pub(crate) trust: TrustLevel,
 }
 
@@ -314,7 +316,7 @@ impl TrustedFreshCompetitorBenchmark {
     pub fn try_new(
         benchmark: CompetitorPriceBenchmark,
         now: Timestamp,
-        max_age: Timestamp,
+        max_age: Duration,
         trust: TrustLevel,
     ) -> DomainResult<Self> {
         if !price_snapshot_fresh(now, max_age, benchmark.best_offer.observed_at) {
@@ -360,7 +362,7 @@ pub struct FreshCurrencyConversion {
     pub(crate) rate: ExchangeRate,
     pub(crate) target_amount: MoneyAmount,
     pub(crate) now: Timestamp,
-    pub(crate) max_age: Timestamp,
+    pub(crate) max_age: Duration,
 }
 
 impl FreshCurrencyConversion {
@@ -369,7 +371,7 @@ impl FreshCurrencyConversion {
         rate: ExchangeRate,
         target_amount: MoneyAmount,
         now: Timestamp,
-        max_age: Timestamp,
+        max_age: Duration,
     ) -> DomainResult<Self> {
         if source_amount.currency != rate.source || target_amount.currency != rate.target {
             return Err(ValidationError::Invariant(
@@ -434,7 +436,7 @@ impl ChargebackForCapturedPayment {
 pub fn demand_forecast_actionable(forecast: &DemandForecast) -> bool {
     confidence_allows_auto_replenish(forecast.confidence)
         && forecast.expected_units > 0
-        && forecast.horizon_days > 0
+        && forecast.horizon_days > Duration::ZERO
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -468,6 +470,121 @@ impl ApprovedOrderableSupplierQuality {
             ));
         }
         Ok(Self { quality })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ConvertedLeadOpportunity {
+    pub(crate) lead: Lead,
+    pub(crate) opportunity: SalesOpportunity,
+}
+
+impl ConvertedLeadOpportunity {
+    pub fn try_new(lead: Lead, opportunity: SalesOpportunity) -> DomainResult<Self> {
+        if *lead.status() != LeadStatus::Converted
+            || *opportunity.source_lead() != Some(*lead.id())
+            || opportunity.account_id() != lead.account_id()
+            || opportunity.contact_id() != lead.contact_id()
+            || opportunity.currency() != lead.currency()
+            || *opportunity.amount() > *lead.estimated_value()
+        {
+            return Err(ValidationError::ImplicitInvariantFailed);
+        }
+        Ok(Self { lead, opportunity })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CRMOrderContact {
+    pub(crate) account: CRMAccount,
+    pub(crate) contact: CRMContact,
+    pub(crate) order: Order,
+}
+
+impl CRMOrderContact {
+    pub fn try_new(account: CRMAccount, contact: CRMContact, order: Order) -> DomainResult<Self> {
+        if !crm_account_active(&account)
+            || contact.account_id() != account.id()
+            || contact.customer_id() != account.customer().id()
+        {
+            return Err(ValidationError::ImplicitInvariantFailed);
+        }
+        Ok(Self {
+            account,
+            contact,
+            order,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ShipmentForCRMOrder {
+    pub(crate) crm_order: CRMOrderContact,
+    pub(crate) plan: LogisticsShipmentPlan,
+}
+
+impl ShipmentForCRMOrder {
+    pub fn try_new(crm_order: CRMOrderContact, plan: LogisticsShipmentPlan) -> DomainResult<Self> {
+        if plan.order() != &crm_order.order {
+            return Err(ValidationError::ImplicitInvariantFailed);
+        }
+        Ok(Self { crm_order, plan })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct LogisticsExceptionSupportCase {
+    pub(crate) exception: LogisticsException,
+    pub(crate) shipment: LogisticsShipmentPlan,
+    pub(crate) support_case: SupportCase,
+}
+
+impl LogisticsExceptionSupportCase {
+    pub fn try_new(
+        exception: LogisticsException,
+        shipment: LogisticsShipmentPlan,
+        support_case: SupportCase,
+    ) -> DomainResult<Self> {
+        if exception.shipment_id() != shipment.id()
+            || *support_case.order_id() != Some(shipment.order().id())
+            || *support_case.status() != SupportCaseStatus::Escalated
+            || *support_case.opened_at() < *exception.raised_at()
+        {
+            return Err(ValidationError::ImplicitInvariantFailed);
+        }
+        Ok(Self {
+            exception,
+            shipment,
+            support_case,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct CRMApprovedReturnHandling {
+    pub(crate) authorization: ReturnAuthorization,
+    pub(crate) receipt: ReturnReceipt,
+}
+
+impl CRMApprovedReturnHandling {
+    pub fn try_new(
+        authorization: ReturnAuthorization,
+        receipt: ReturnReceipt,
+    ) -> DomainResult<Self> {
+        if !return_authorization_approved(&authorization)
+            || receipt.authorization() != &authorization
+        {
+            return Err(ValidationError::ImplicitInvariantFailed);
+        }
+        Ok(Self {
+            authorization,
+            receipt,
+        })
     }
 }
 
@@ -531,7 +648,7 @@ impl_getters!(WholesaleCreditCheckout {
 impl_getters!(TrustedFreshCompetitorBenchmark {
     benchmark: CompetitorPriceBenchmark,
     now: Timestamp,
-    max_age: Timestamp,
+    max_age: Duration,
     trust: TrustLevel,
 });
 
@@ -545,7 +662,7 @@ impl_getters!(FreshCurrencyConversion {
     rate: ExchangeRate,
     target_amount: MoneyAmount,
     now: Timestamp,
-    max_age: Timestamp,
+    max_age: Duration,
 });
 
 impl_getters!(ValidGiftCardRedemptionAt {
@@ -564,4 +681,31 @@ impl_getters!(ActionableDemandForecast {
 
 impl_getters!(ApprovedOrderableSupplierQuality {
     quality: ApprovedSupplierQuality,
+});
+
+impl_getters!(ConvertedLeadOpportunity {
+    lead: Lead,
+    opportunity: SalesOpportunity,
+});
+
+impl_getters!(CRMOrderContact {
+    account: CRMAccount,
+    contact: CRMContact,
+    order: Order,
+});
+
+impl_getters!(ShipmentForCRMOrder {
+    crm_order: CRMOrderContact,
+    plan: LogisticsShipmentPlan,
+});
+
+impl_getters!(LogisticsExceptionSupportCase {
+    exception: LogisticsException,
+    shipment: LogisticsShipmentPlan,
+    support_case: SupportCase,
+});
+
+impl_getters!(CRMApprovedReturnHandling {
+    authorization: ReturnAuthorization,
+    receipt: ReturnReceipt,
 });

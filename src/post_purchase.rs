@@ -19,7 +19,7 @@ pub struct SubscriptionPlan {
 
 impl SubscriptionPlan {
     pub fn try_new(price: Money, period_days: Days) -> DomainResult<Self> {
-        if period_days == 0 {
+        if period_days <= Duration::ZERO {
             return Err(ValidationError::Invariant(
                 "subscription period must be positive",
             ));

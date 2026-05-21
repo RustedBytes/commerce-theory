@@ -149,16 +149,43 @@ impl SafeProductFeedLine {
     }
 }
 
+pub fn marketplace_fee_rounded(
+    mode: RoundingMode,
+    gross: Money,
+    fee_rate: BasisPoints,
+) -> DomainResult<Money> {
+    round_bps_amount(mode, gross, fee_rate)
+}
+
+pub fn marketplace_payout_rounded(
+    mode: RoundingMode,
+    gross: Money,
+    payout_rate: BasisPoints,
+) -> DomainResult<Money> {
+    round_bps_amount(mode, gross, payout_rate)
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct MarketplaceFeeLedger {
     pub(crate) gross: Money,
+    pub(crate) fee_rate: BasisPoints,
+    pub(crate) fee_rounding_mode: RoundingMode,
     pub(crate) fee: Money,
     pub(crate) payout: Money,
 }
 
 impl MarketplaceFeeLedger {
-    pub fn try_new(gross: Money, fee: Money, payout: Money) -> DomainResult<Self> {
+    pub fn try_new(
+        gross: Money,
+        fee_rate: BasisPoints,
+        fee_rounding_mode: RoundingMode,
+        fee: Money,
+        payout: Money,
+    ) -> DomainResult<Self> {
+        if fee != marketplace_fee_rounded(fee_rounding_mode, gross, fee_rate)? {
+            return Err(ValidationError::Invariant("marketplace fee is incorrect"));
+        }
         if fee > gross {
             return Err(ValidationError::Invariant("marketplace fee exceeds gross"));
         }
@@ -167,11 +194,43 @@ impl MarketplaceFeeLedger {
                 "marketplace payout is incorrect",
             ));
         }
-        Ok(Self { gross, fee, payout })
+        Ok(Self {
+            gross,
+            fee_rate,
+            fee_rounding_mode,
+            fee,
+            payout,
+        })
     }
+}
 
-    pub fn payout(&self) -> Money {
-        self.payout
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct MarketplacePayoutCalculation {
+    pub(crate) gross: Money,
+    pub(crate) payout_rate: BasisPoints,
+    pub(crate) payout_rounding_mode: RoundingMode,
+    pub(crate) payout: Money,
+}
+
+impl MarketplacePayoutCalculation {
+    pub fn try_new(
+        gross: Money,
+        payout_rate: BasisPoints,
+        payout_rounding_mode: RoundingMode,
+        payout: Money,
+    ) -> DomainResult<Self> {
+        if payout != marketplace_payout_rounded(payout_rounding_mode, gross, payout_rate)? {
+            return Err(ValidationError::Invariant(
+                "marketplace payout is incorrect",
+            ));
+        }
+        Ok(Self {
+            gross,
+            payout_rate,
+            payout_rounding_mode,
+            payout,
+        })
     }
 }
 
@@ -230,15 +289,25 @@ impl_getters!(SafeProductFeedLine {
     price_policy: ChannelPricePolicy,
 });
 
+impl_getters!(MarketplaceFeeLedger {
+    gross: Money,
+    fee_rate: BasisPoints,
+    fee_rounding_mode: RoundingMode,
+    fee: Money,
+    payout: Money,
+});
+
+impl_getters!(MarketplacePayoutCalculation {
+    gross: Money,
+    payout_rate: BasisPoints,
+    payout_rounding_mode: RoundingMode,
+    payout: Money,
+});
+
 impl_getters!(MarketplaceOrder {
     marketplace: Marketplace,
     external_order_id: MarketplaceOrderId,
     internal_order: Order,
     gross_from_marketplace: Money,
     fee_ledger: MarketplaceFeeLedger,
-});
-
-impl_getters!(MarketplaceFeeLedger {
-    gross: Money,
-    fee: Money,
 });

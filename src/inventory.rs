@@ -278,6 +278,335 @@ impl DistinctFulfillmentPlan {
     }
 }
 
+pub fn release_reserved_stock(s: &StockState, q: Quantity) -> DomainResult<StockState> {
+    if q > s.reserved {
+        return Err(ValidationError::InventoryInvariantFailed);
+    }
+    StockState::try_new(s.sku, s.total, nat_sub(s.reserved, q))
+}
+
+pub fn confirm_reserved_shipment(s: &StockState, q: Quantity) -> DomainResult<StockState> {
+    if q > s.reserved {
+        return Err(ValidationError::InventoryInvariantFailed);
+    }
+    StockState::try_new(s.sku, nat_sub(s.total, q), nat_sub(s.reserved, q))
+}
+
+pub fn compare_and_swap_reserve(
+    s: &VersionedStock,
+    q: Quantity,
+    expected_version: Nat,
+) -> Option<VersionedStock> {
+    reserve_versioned_stock(s, q, expected_version).ok()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ReservationAttempt {
+    pub(crate) stock: VersionedStock,
+    pub(crate) quantity: Quantity,
+    pub(crate) expected_version: Nat,
+}
+
+impl ReservationAttempt {
+    pub fn new(stock: VersionedStock, quantity: Quantity, expected_version: Nat) -> Self {
+        Self {
+            stock,
+            quantity,
+            expected_version,
+        }
+    }
+}
+
+pub fn commit_reservation_attempt(attempt: &ReservationAttempt) -> Option<VersionedStock> {
+    compare_and_swap_reserve(&attempt.stock, attempt.quantity, attempt.expected_version)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct ConcurrentReservationConflict {
+    pub(crate) first: ReservationAttempt,
+    pub(crate) second: ReservationAttempt,
+}
+
+impl ConcurrentReservationConflict {
+    pub fn try_new(first: ReservationAttempt, second: ReservationAttempt) -> DomainResult<Self> {
+        if first.stock.stock.sku != second.stock.stock.sku
+            || first.expected_version != second.expected_version
+        {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self { first, second })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum ReservationStatus {
+    Active,
+    Expired,
+    Confirmed,
+    Released,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct TimedReservation {
+    pub(crate) stock: StockState,
+    pub(crate) quantity: Quantity,
+    pub(crate) reserved_at: Timestamp,
+    pub(crate) expires_at: Timestamp,
+    pub(crate) status: ReservationStatus,
+}
+
+impl TimedReservation {
+    pub fn try_new(
+        stock: StockState,
+        quantity: Quantity,
+        reserved_at: Timestamp,
+        expires_at: Timestamp,
+        status: ReservationStatus,
+    ) -> DomainResult<Self> {
+        if expires_at < reserved_at || quantity > stock.reserved {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self {
+            stock,
+            quantity,
+            reserved_at,
+            expires_at,
+            status,
+        })
+    }
+}
+
+pub fn reservation_expired_at(now: Timestamp, reservation: &TimedReservation) -> bool {
+    reservation.expires_at < now
+}
+
+pub fn reservation_active_at(now: Timestamp, reservation: &TimedReservation) -> bool {
+    reservation.status == ReservationStatus::Active && now <= reservation.expires_at
+}
+
+pub fn release_expired_reservation(
+    reservation: &TimedReservation,
+    now: Timestamp,
+) -> DomainResult<StockState> {
+    if !reservation_expired_at(now, reservation) {
+        return Err(ValidationError::InventoryInvariantFailed);
+    }
+    release_reserved_stock(&reservation.stock, reservation.quantity)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct BackorderRequest {
+    pub(crate) sku: Sku,
+    pub(crate) requested: Quantity,
+    pub(crate) available_now: Quantity,
+    pub(crate) backordered: Quantity,
+}
+
+impl BackorderRequest {
+    pub fn try_new(
+        sku: Sku,
+        requested: Quantity,
+        available_now: Quantity,
+        backordered: Quantity,
+    ) -> DomainResult<Self> {
+        if requested != checked_add(available_now, backordered, "backorder quantity")? {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self {
+            sku,
+            requested,
+            available_now,
+            backordered,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PreorderWindow {
+    pub(crate) sku: Sku,
+    pub(crate) opens_at: Timestamp,
+    pub(crate) closes_at: Timestamp,
+    pub(crate) capacity: Quantity,
+}
+
+impl PreorderWindow {
+    pub fn try_new(
+        sku: Sku,
+        opens_at: Timestamp,
+        closes_at: Timestamp,
+        capacity: Quantity,
+    ) -> DomainResult<Self> {
+        if closes_at < opens_at {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self {
+            sku,
+            opens_at,
+            closes_at,
+            capacity,
+        })
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct PreorderReservation {
+    pub(crate) window: PreorderWindow,
+    pub(crate) quantity: Quantity,
+    pub(crate) reserved_at: Timestamp,
+}
+
+impl PreorderReservation {
+    pub fn try_new(
+        window: PreorderWindow,
+        quantity: Quantity,
+        reserved_at: Timestamp,
+    ) -> DomainResult<Self> {
+        if quantity > window.capacity
+            || reserved_at < window.opens_at
+            || reserved_at > window.closes_at
+        {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self {
+            window,
+            quantity,
+            reserved_at,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SerialNumber {
+    value: Nat,
+}
+
+impl SerialNumber {
+    pub const fn new(value: Nat) -> Self {
+        Self { value }
+    }
+
+    pub const fn value(self) -> Nat {
+        self.value
+    }
+}
+
+domain_struct! {
+    pub struct SerializedInventoryUnit {
+        sku: Sku,
+        serial: SerialNumber,
+        warehouse: Warehouse,
+        reserved: bool,
+    }
+}
+
+pub fn serial_numbers_distinct(units: &[SerializedInventoryUnit]) -> bool {
+    let mut seen = HashSet::new();
+    units.iter().all(|unit| seen.insert(unit.serial.value()))
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SerializedInventorySet {
+    pub(crate) units: Vec<SerializedInventoryUnit>,
+}
+
+impl SerializedInventorySet {
+    pub fn try_new(units: Vec<SerializedInventoryUnit>) -> DomainResult<Self> {
+        if !serial_numbers_distinct(&units) {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self { units })
+    }
+}
+
+domain_struct! {
+    pub struct InventoryLot {
+        sku: Sku,
+        lot_id: Id,
+        warehouse: Warehouse,
+        expires_at: Timestamp,
+        quantity: Quantity,
+    }
+}
+
+pub fn lot_usable_at(now: Timestamp, lot: &InventoryLot) -> bool {
+    now <= lot.expires_at && lot.quantity > 0
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SkuSubstitution {
+    pub(crate) requested_sku: Sku,
+    pub(crate) substitute_sku: Sku,
+    pub(crate) substitute_stock: StockState,
+    pub(crate) max_substitute_qty: Quantity,
+}
+
+impl SkuSubstitution {
+    pub fn try_new(
+        requested_sku: Sku,
+        substitute_sku: Sku,
+        substitute_stock: StockState,
+        max_substitute_qty: Quantity,
+    ) -> DomainResult<Self> {
+        if substitute_stock.sku != substitute_sku
+            || max_substitute_qty > available_stock(&substitute_stock)
+        {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self {
+            requested_sku,
+            substitute_sku,
+            substitute_stock,
+            max_substitute_qty,
+        })
+    }
+}
+
+pub fn allocation_warehouse_ids(allocations: &[Allocation]) -> Vec<Id> {
+    allocations
+        .iter()
+        .map(|allocation| allocation.node.warehouse.id)
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub struct SplitFulfillmentPlan {
+    pub(crate) plan: DistinctFulfillmentPlan,
+    pub(crate) first_warehouse: Warehouse,
+    pub(crate) second_warehouse: Warehouse,
+}
+
+impl SplitFulfillmentPlan {
+    pub fn try_new(
+        plan: DistinctFulfillmentPlan,
+        first_warehouse: Warehouse,
+        second_warehouse: Warehouse,
+    ) -> DomainResult<Self> {
+        let ids = allocation_warehouse_ids(plan.allocations());
+        if !ids.contains(first_warehouse.id())
+            || !ids.contains(second_warehouse.id())
+            || first_warehouse.id() == second_warehouse.id()
+        {
+            return Err(ValidationError::InventoryInvariantFailed);
+        }
+        Ok(Self {
+            plan,
+            first_warehouse,
+            second_warehouse,
+        })
+    }
+}
+
 impl_getters!(PickTask {
     sku: Sku,
     requested: Quantity,
@@ -297,4 +626,58 @@ impl_getters!(WarehouseShipment {
 impl_getters!(DistinctFulfillmentPlan {
     requested: Quantity,
     allocations: Vec<Allocation>,
+});
+
+impl_getters!(ReservationAttempt {
+    stock: VersionedStock,
+    quantity: Quantity,
+    expected_version: Nat,
+});
+
+impl_getters!(ConcurrentReservationConflict {
+    first: ReservationAttempt,
+    second: ReservationAttempt,
+});
+
+impl_getters!(TimedReservation {
+    stock: StockState,
+    quantity: Quantity,
+    reserved_at: Timestamp,
+    expires_at: Timestamp,
+    status: ReservationStatus,
+});
+
+impl_getters!(BackorderRequest {
+    sku: Sku,
+    requested: Quantity,
+    available_now: Quantity,
+    backordered: Quantity,
+});
+
+impl_getters!(PreorderWindow {
+    sku: Sku,
+    opens_at: Timestamp,
+    closes_at: Timestamp,
+    capacity: Quantity,
+});
+
+impl_getters!(PreorderReservation {
+    window: PreorderWindow,
+    quantity: Quantity,
+    reserved_at: Timestamp,
+});
+
+impl_getters!(SerializedInventorySet { units: Vec<SerializedInventoryUnit> });
+
+impl_getters!(SkuSubstitution {
+    requested_sku: Sku,
+    substitute_sku: Sku,
+    substitute_stock: StockState,
+    max_substitute_qty: Quantity,
+});
+
+impl_getters!(SplitFulfillmentPlan {
+    plan: DistinctFulfillmentPlan,
+    first_warehouse: Warehouse,
+    second_warehouse: Warehouse,
 });

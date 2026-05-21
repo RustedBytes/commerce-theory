@@ -34,16 +34,24 @@ impl ExchangeRate {
     }
 }
 
-pub fn fx_quote_fresh(now: Timestamp, max_age: Timestamp, rate: &ExchangeRate) -> bool {
-    rate.observed_at <= now && now - rate.observed_at <= max_age
+pub fn fx_quote_fresh(now: Timestamp, max_age: Duration, rate: &ExchangeRate) -> bool {
+    rate.observed_at <= now && timestamp_age(now, rate.observed_at) <= max_age
+}
+
+pub fn convert_money_rounded(
+    mode: RoundingMode,
+    amount: Money,
+    rate: &ExchangeRate,
+) -> DomainResult<Money> {
+    round_money(
+        mode,
+        checked_mul(amount, rate.numerator, "convert_money_floor multiply")?,
+        rate.denominator,
+    )
 }
 
 pub fn convert_money_floor(amount: Money, rate: &ExchangeRate) -> DomainResult<Money> {
-    checked_div(
-        checked_mul(amount, rate.numerator, "convert_money_floor multiply")?,
-        rate.denominator,
-        "convert_money_floor divide",
-    )
+    convert_money_rounded(RoundingMode::Floor, amount, rate)
 }
 
 domain_struct! {
@@ -56,21 +64,42 @@ domain_struct! {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TaxCalculation {
     pub(crate) taxable_amount: Money,
+    pub(crate) rate: TaxRate,
+    pub(crate) rounding_mode: RoundingMode,
     pub(crate) tax: Money,
     pub(crate) total: Money,
 }
 
 impl TaxCalculation {
-    pub fn try_new(taxable_amount: Money, tax: Money, total: Money) -> DomainResult<Self> {
+    pub fn try_new(
+        taxable_amount: Money,
+        rate: TaxRate,
+        rounding_mode: RoundingMode,
+        tax: Money,
+        total: Money,
+    ) -> DomainResult<Self> {
+        if tax != tax_amount_rounded(rounding_mode, &rate, taxable_amount)? {
+            return Err(ValidationError::Invariant("tax amount is incorrect"));
+        }
         if total != checked_add(taxable_amount, tax, "tax calculation total")? {
             return Err(ValidationError::Invariant("tax total is incorrect"));
         }
         Ok(Self {
             taxable_amount,
+            rate,
+            rounding_mode,
             tax,
             total,
         })
     }
+}
+
+pub fn tax_amount_rounded(
+    mode: RoundingMode,
+    rate: &TaxRate,
+    taxable_amount: Money,
+) -> DomainResult<Money> {
+    round_bps_amount(mode, taxable_amount, *rate.bps())
 }
 
 domain_struct! {
@@ -162,6 +191,8 @@ impl_getters!(ExchangeRate {
 
 impl_getters!(TaxCalculation {
     taxable_amount: Money,
+    rate: TaxRate,
+    rounding_mode: RoundingMode,
     tax: Money,
     total: Money,
 });

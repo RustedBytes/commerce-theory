@@ -8,6 +8,7 @@ pub enum OrderEventSymbol {
     RefundIssued,
     StockReserved,
     OrderShipped,
+    Other,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +29,14 @@ pub fn domain_event_symbol(event: &DomainEvent) -> OrderEventSymbol {
         DomainEvent::RefundIssued(_, _) => OrderEventSymbol::RefundIssued,
         DomainEvent::StockReserved(_, _) => OrderEventSymbol::StockReserved,
         DomainEvent::OrderShipped(_) => OrderEventSymbol::OrderShipped,
+        DomainEvent::ReservationReleased(_, _)
+        | DomainEvent::ReservedShipmentConfirmed(_, _)
+        | DomainEvent::TaxLiabilityRecorded(_, _)
+        | DomainEvent::LeadConverted(_, _)
+        | DomainEvent::SupportCaseOpened(_, _)
+        | DomainEvent::ShipmentPlanned(_, _)
+        | DomainEvent::ShipmentDelivered(_)
+        | DomainEvent::ReturnApproved(_, _, _) => OrderEventSymbol::Other,
     }
 }
 
@@ -58,6 +67,7 @@ pub fn order_event_validation_step(
         (OrderEventValidationState::Captured, OrderEventSymbol::OrderShipped) => {
             OrderEventValidationState::Shipped
         }
+        (state, OrderEventSymbol::Other) => state,
         _ => OrderEventValidationState::Invalid,
     }
 }
