@@ -2,7 +2,7 @@
 
 Runtime Rust mirror of the `CommerceTheory` Lean package.
 
-This crate turns the Lean model's proof-carrying commerce records into ordinary
+This crate turns the [Lean model](https://github.com/Dividing0/commerce-theory)'s proof-carrying commerce records into ordinary
 Rust domain types with private fields, smart constructors, executable
 predicates, checked arithmetic, and tests for the headline safety guarantees.
 
