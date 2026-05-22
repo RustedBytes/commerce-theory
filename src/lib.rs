@@ -140,7 +140,6 @@ macro_rules! impl_getters {
 
 pub mod accounting;
 pub mod b2b;
-pub mod basic;
 pub mod catalog;
 pub mod competitor_pricing;
 pub mod crm;
@@ -173,7 +172,6 @@ pub mod workflow;
 
 pub use accounting::*;
 pub use b2b::*;
-pub use basic::*;
 pub use catalog::*;
 pub use competitor_pricing::*;
 pub use crm::*;
