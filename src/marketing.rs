@@ -47,6 +47,7 @@ pub enum AdDestination {
     MarketplaceListing(Marketplace, Nat),
 }
 
+#[must_use]
 pub fn destination_matches_marketplace(
     destination: AdDestination,
     marketplace: Marketplace,
@@ -77,7 +78,7 @@ pub struct MarketingCampaign {
 
 impl MarketingCampaign {
     #[allow(clippy::too_many_arguments)]
-    pub fn try_new(
+    pub const fn try_new(
         id: CampaignId,
         platform: AdPlatform,
         ad_type: AdType,
@@ -127,7 +128,7 @@ pub struct ClickAttributedCampaign {
 }
 
 impl ClickAttributedCampaign {
-    pub fn try_new(campaign: MarketingCampaign) -> DomainResult<Self> {
+    pub const fn try_new(campaign: MarketingCampaign) -> DomainResult<Self> {
         if campaign.conversions > campaign.clicks {
             return Err(ValidationError::Invariant("conversions exceed clicks"));
         }
@@ -156,7 +157,7 @@ pub struct Funnel {
 }
 
 impl Funnel {
-    pub fn try_new(
+    pub const fn try_new(
         visitors: Nat,
         add_to_cart: Nat,
         checkout_started: Nat,
@@ -183,6 +184,7 @@ pub enum ConsentStatus {
     Unknown,
 }
 
+#[must_use]
 pub fn can_retarget(consent: ConsentStatus) -> bool {
     consent == ConsentStatus::Granted
 }
@@ -194,6 +196,7 @@ pub enum SubscriptionStatus {
     Unsubscribed,
 }
 
+#[must_use]
 pub fn can_send_marketing_message(status: SubscriptionStatus) -> bool {
     status == SubscriptionStatus::Subscribed
 }
@@ -213,6 +216,7 @@ pub fn attribution_credit_total(credits: &[AttributionCredit]) -> DomainResult<M
     )
 }
 
+#[must_use]
 pub fn attribution_credits_match_order(order: &Order, credits: &[AttributionCredit]) -> bool {
     credits.iter().all(|credit| credit.order_id == order.id())
 }
@@ -260,7 +264,7 @@ pub struct ExperimentVariant {
 }
 
 impl ExperimentVariant {
-    pub fn try_new(
+    pub const fn try_new(
         id: Id,
         traffic_weight: Nat,
         visitors: Nat,

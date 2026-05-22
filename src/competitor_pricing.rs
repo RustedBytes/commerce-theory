@@ -14,10 +14,12 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn competitor_offer_relevant(offer: &CompetitorOffer, sku: Sku, currency: Currency) -> bool {
     offer.sku == sku && offer.currency == currency && offer.active && offer.in_stock
 }
 
+#[must_use]
 pub fn price_snapshot_fresh(now: Timestamp, max_age: Duration, observed_at: Timestamp) -> bool {
     observed_at <= now && timestamp_age(now, observed_at) <= max_age
 }
@@ -30,7 +32,8 @@ pub enum TrustLevel {
     High,
 }
 
-pub fn trust_allows_auto_repricing(trust: TrustLevel) -> bool {
+#[must_use]
+pub const fn trust_allows_auto_repricing(trust: TrustLevel) -> bool {
     matches!(trust, TrustLevel::Medium | TrustLevel::High)
 }
 
@@ -73,12 +76,14 @@ impl CompetitorPriceBenchmark {
         })
     }
 
-    pub fn best_offer(&self) -> &CompetitorOffer {
+    #[must_use]
+    pub const fn best_offer(&self) -> &CompetitorOffer {
         &self.best_offer
     }
 }
 
-pub fn customer_net_at_offer_price(price: Money, discount: Money) -> Money {
+#[must_use]
+pub const fn customer_net_at_offer_price(price: Money, discount: Money) -> Money {
     nat_sub(price, discount)
 }
 
@@ -118,11 +123,13 @@ pub fn price_profitable_for_min_profit(
     Ok(profitable_price_floor(costs, min_profit, discount)? <= price)
 }
 
-pub fn price_at_or_below_competitor(own_price: Money, competitor_price: Money) -> bool {
+#[must_use]
+pub const fn price_at_or_below_competitor(own_price: Money, competitor_price: Money) -> bool {
     own_price <= competitor_price
 }
 
-pub fn undercut_price(competitor_price: Money, delta: Money) -> Money {
+#[must_use]
+pub const fn undercut_price(competitor_price: Money, delta: Money) -> Money {
     nat_sub(competitor_price, delta)
 }
 

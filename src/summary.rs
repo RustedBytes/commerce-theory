@@ -129,7 +129,7 @@ mod tests {
     fn inventory_feed_and_keyed_totals_are_safe() {
         let stock = StockState::try_new(sku(), 10, 3).unwrap();
         let warehouse = Warehouse::new(1, "main".to_owned());
-        let node = InventoryNode::new(warehouse, stock.clone());
+        let node = InventoryNode::new(warehouse, stock);
         let allocation = Allocation::try_new(node, 4).unwrap();
         let plan = FulfillmentPlan::try_new(4, vec![allocation.clone()]).unwrap();
         assert!(plan.requested() <= allocations_available_total(plan.allocations()).unwrap());
@@ -158,7 +158,7 @@ mod tests {
     fn dropship_supplier_quality_and_opportunities() {
         let offer =
             DropshipOffer::try_new(sku(), supplier(), 40, 100, 2, 10, Currency::USD, true).unwrap();
-        let line = DropshipLine::try_new(offer.clone(), 1, 10).unwrap();
+        let line = DropshipLine::try_new(offer, 1, 10).unwrap();
         assert!(
             dropship_line_supplier_cost(&line).unwrap()
                 <= dropship_line_customer_net(&line).unwrap()
@@ -267,14 +267,14 @@ mod tests {
             discount: 500,
             weight: 3,
         };
-        let line = validate_cart_line(raw_line.clone()).unwrap();
+        let line = validate_cart_line(raw_line).unwrap();
         assert_eq!(line_gross_total(&line).unwrap(), 5_000);
         assert_eq!(line_net_total(&line).unwrap(), 4_500);
         assert_eq!(line_weight_total(&line).unwrap(), 6);
         assert_eq!(
             validate_cart_line(RawCartLine {
                 discount: 6_000,
-                ..raw_line.clone()
+                ..raw_line
             })
             .unwrap_err(),
             ValidationError::LineDiscountExceedsGross
@@ -324,7 +324,7 @@ mod tests {
             total: 10,
             reserved: 3,
         };
-        let stock = validate_stock_state(raw_stock.clone()).unwrap();
+        let stock = validate_stock_state(raw_stock).unwrap();
         let policy = RawChannelPricePolicy {
             min_price: 1_000,
             max_price: 2_000,
@@ -335,11 +335,11 @@ mod tests {
             price: 1_500,
             currency: Currency::USD,
             stock: 5,
-            stock_state: raw_stock.clone(),
+            stock_state: raw_stock,
             price_policy: policy,
         })
         .unwrap();
-        assert_eq!(*feed.stock(), 5);
+        assert_eq!(feed.stock(), 5);
         assert_eq!(available_stock(&stock), 7);
 
         let ledger = validate_payment_ledger(RawPaymentLedger {
@@ -355,7 +355,7 @@ mod tests {
         );
 
         let versioned = validate_versioned_stock(raw_stock, 4).unwrap();
-        let next = validate_compare_and_swap_reservation(versioned.clone(), 4, 4).unwrap();
+        let next = validate_compare_and_swap_reservation(versioned, 4, 4).unwrap();
         assert_eq!(next.version(), 5);
         assert_eq!(next.stock().reserved(), 7);
         assert!(validate_compare_and_swap_reservation(versioned, 4, 3).is_err());
@@ -422,9 +422,9 @@ mod tests {
         assert_eq!(next.stock().reserved(), 5);
         assert_eq!(next.ledger().captured(), 150);
         assert_eq!(next.ledger().refunded(), 50);
-        assert_eq!(*next.tax_liability(), 15);
-        assert_eq!(*next.crm_event_count(), 3);
-        assert_eq!(*next.logistics_event_count(), 6);
+        assert_eq!(next.tax_liability(), 15);
+        assert_eq!(next.crm_event_count(), 3);
+        assert_eq!(next.logistics_event_count(), 6);
 
         assert!(
             replay_domain_events(
@@ -450,7 +450,7 @@ mod tests {
             DomainEvent::LeadConverted(LeadId::new(7), OpportunityId::new(8)),
         )
         .unwrap();
-        assert_eq!(*domain_step.after().crm_event_count(), 3);
+        assert_eq!(domain_step.after().crm_event_count(), 3);
         assert!(
             ValidDomainEventStep::from_event(
                 after_second,
@@ -461,6 +461,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)]
     fn crm_logistics_and_tax_constructors_reject_invalid_edges() {
         let customer = Customer::new(CustomerId::new(1), CustomerKind::WholesaleAccount, true);
         assert!(
@@ -476,7 +477,7 @@ mod tests {
         );
         let account = CRMAccount::try_new(
             AccountId::new(1),
-            customer.clone(),
+            customer,
             AccountTier::Strategic,
             CRMAccountStatus::Active,
             1_000,
@@ -501,7 +502,7 @@ mod tests {
         assert!(contact_can_receive_marketing(&contact));
         assert!(
             CRMAccountContact::try_new(
-                account.clone(),
+                account,
                 CRMContact::new(
                     ContactId::new(3),
                     AccountId::new(99),
@@ -692,7 +693,7 @@ mod tests {
             100,
             20,
             TaxTreatment::Taxable,
-            tax_rate.clone(),
+            tax_rate,
             RoundingMode::Floor,
             180,
             18,

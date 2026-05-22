@@ -26,7 +26,7 @@ pub struct BoundedCouponApplication {
 }
 
 impl BoundedCouponApplication {
-    pub fn try_new(coupon: Coupon, subtotal: Money, uses_before: Nat) -> DomainResult<Self> {
+    pub const fn try_new(coupon: Coupon, subtotal: Money, uses_before: Nat) -> DomainResult<Self> {
         if !coupon_can_be_applied(&coupon, subtotal, uses_before) {
             return Err(ValidationError::Invariant("coupon cannot be applied"));
         }
@@ -62,10 +62,12 @@ impl CapturedPaymentMatchesOrder {
     }
 }
 
+#[must_use]
 pub fn event_stream_last_sequence_from(last: Nat, events: &[EventEnvelope]) -> Nat {
     events.last().map_or(last, |event| event.sequence)
 }
 
+#[must_use]
 pub fn event_stream_computed_last_sequence(stream: &EventStream) -> Nat {
     event_stream_last_sequence_from(0, &stream.events)
 }
@@ -92,11 +94,13 @@ impl ValidEventStream {
     }
 }
 
+#[must_use]
 pub fn product_active(product: &Product) -> bool {
     product.status == ProductStatus::Active
 }
 
-pub fn variant_active(variant: &ProductVariant) -> bool {
+#[must_use]
+pub const fn variant_active(variant: &ProductVariant) -> bool {
     variant.active
 }
 
@@ -115,7 +119,8 @@ impl SellableCatalogEntry {
     }
 }
 
-pub fn feed_line_has_stock(line: &SafeProductFeedLine) -> bool {
+#[must_use]
+pub const fn feed_line_has_stock(line: &SafeProductFeedLine) -> bool {
     line.stock > 0
 }
 
@@ -126,7 +131,7 @@ pub struct PublishableFeedLine {
 }
 
 impl PublishableFeedLine {
-    pub fn try_new(line: SafeProductFeedLine) -> DomainResult<Self> {
+    pub const fn try_new(line: SafeProductFeedLine) -> DomainResult<Self> {
         if !feed_line_has_stock(&line) {
             return Err(ValidationError::Invariant("feed line has no stock"));
         }
@@ -134,11 +139,13 @@ impl PublishableFeedLine {
     }
 }
 
-pub fn distributor_product_active(product: &DistributorProduct) -> bool {
+#[must_use]
+pub const fn distributor_product_active(product: &DistributorProduct) -> bool {
     product.active
 }
 
-pub fn distributor_product_can_source(product: &DistributorProduct, units: Quantity) -> bool {
+#[must_use]
+pub const fn distributor_product_can_source(product: &DistributorProduct, units: Quantity) -> bool {
     distributor_product_active(product)
         && product.min_order_qty <= units
         && units <= product.available_qty
@@ -152,7 +159,7 @@ pub struct SourceableDistributorProduct {
 }
 
 impl SourceableDistributorProduct {
-    pub fn try_new(product: DistributorProduct, units: Quantity) -> DomainResult<Self> {
+    pub const fn try_new(product: DistributorProduct, units: Quantity) -> DomainResult<Self> {
         if !distributor_product_can_source(&product, units) {
             return Err(ValidationError::Invariant(
                 "distributor product cannot source requested units",
@@ -170,7 +177,7 @@ pub struct FraudCheckedCouponApplication {
 }
 
 impl FraudCheckedCouponApplication {
-    pub fn try_new(
+    pub const fn try_new(
         application: BoundedCouponApplication,
         policy: FraudPolicy,
     ) -> DomainResult<Self> {
@@ -420,7 +427,7 @@ pub struct ChargebackForCapturedPayment {
 }
 
 impl ChargebackForCapturedPayment {
-    pub fn try_new(payment: CapturedPayment, chargeback: Chargeback) -> DomainResult<Self> {
+    pub const fn try_new(payment: CapturedPayment, chargeback: Chargeback) -> DomainResult<Self> {
         if chargeback.payment_amount != payment.amount {
             return Err(ValidationError::Invariant(
                 "chargeback payment amount mismatch",
@@ -433,6 +440,7 @@ impl ChargebackForCapturedPayment {
     }
 }
 
+#[must_use]
 pub fn demand_forecast_actionable(forecast: &DemandForecast) -> bool {
     confidence_allows_auto_replenish(forecast.confidence)
         && forecast.expected_units > 0
@@ -482,12 +490,12 @@ pub struct ConvertedLeadOpportunity {
 
 impl ConvertedLeadOpportunity {
     pub fn try_new(lead: Lead, opportunity: SalesOpportunity) -> DomainResult<Self> {
-        if *lead.status() != LeadStatus::Converted
-            || *opportunity.source_lead() != Some(*lead.id())
+        if lead.status() != LeadStatus::Converted
+            || opportunity.source_lead() != Some(lead.id())
             || opportunity.account_id() != lead.account_id()
             || opportunity.contact_id() != lead.contact_id()
             || opportunity.currency() != lead.currency()
-            || *opportunity.amount() > *lead.estimated_value()
+            || opportunity.amount() > lead.estimated_value()
         {
             return Err(ValidationError::ImplicitInvariantFailed);
         }
@@ -550,9 +558,9 @@ impl LogisticsExceptionSupportCase {
         support_case: SupportCase,
     ) -> DomainResult<Self> {
         if exception.shipment_id() != shipment.id()
-            || *support_case.order_id() != Some(shipment.order().id())
-            || *support_case.status() != SupportCaseStatus::Escalated
-            || *support_case.opened_at() < *exception.raised_at()
+            || support_case.order_id() != Some(shipment.order().id())
+            || support_case.status() != SupportCaseStatus::Escalated
+            || support_case.opened_at() < exception.raised_at()
         {
             return Err(ValidationError::ImplicitInvariantFailed);
         }

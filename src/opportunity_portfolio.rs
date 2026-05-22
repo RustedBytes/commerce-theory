@@ -72,11 +72,13 @@ impl DropshipOpportunityCandidate {
         })
     }
 
-    pub fn expected_profit(&self) -> Money {
+    #[must_use]
+    pub const fn expected_profit(&self) -> Money {
         self.expected_profit
     }
 
-    pub fn min_profit(&self) -> Money {
+    #[must_use]
+    pub const fn min_profit(&self) -> Money {
         self.min_profit
     }
 }
@@ -132,7 +134,7 @@ impl DropshipOpportunityPortfolio {
     }
 }
 
-pub(crate) fn _forecasting_anchor(_: Option<Confidence>) {}
+pub(crate) const fn _forecasting_anchor(_: Option<Confidence>) {}
 
 impl_getters!(DropshipOpportunityCandidate {
     sku: Sku,

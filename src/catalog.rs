@@ -56,11 +56,13 @@ impl ProductCatalogEntry {
         Ok(Self { product, variant })
     }
 
-    pub fn product(&self) -> &Product {
+    #[must_use]
+    pub const fn product(&self) -> &Product {
         &self.product
     }
 
-    pub fn variant(&self) -> &ProductVariant {
+    #[must_use]
+    pub const fn variant(&self) -> &ProductVariant {
         &self.variant
     }
 }
@@ -96,7 +98,7 @@ pub struct ValidListingContent {
 }
 
 impl ValidListingContent {
-    pub fn try_new(
+    pub const fn try_new(
         content: ListingContent,
         policy: MarketplaceContentPolicy,
     ) -> DomainResult<Self> {
@@ -114,11 +116,13 @@ impl ValidListingContent {
         Ok(Self { content, policy })
     }
 
-    pub fn content(&self) -> &ListingContent {
+    #[must_use]
+    pub const fn content(&self) -> &ListingContent {
         &self.content
     }
 
-    pub fn policy(&self) -> &MarketplaceContentPolicy {
+    #[must_use]
+    pub const fn policy(&self) -> &MarketplaceContentPolicy {
         &self.policy
     }
 }

@@ -30,7 +30,8 @@ pub fn dropship_profit_costs_total(c: &DropshipProfitCosts) -> DomainResult<Mone
     )
 }
 
-pub fn revenue_after_discount(gross: Money, discount: Money) -> Money {
+#[must_use]
+pub const fn revenue_after_discount(gross: Money, discount: Money) -> Money {
     nat_sub(gross, discount)
 }
 
@@ -118,6 +119,7 @@ impl DropshipCostUpperBounds {
     }
 }
 
+#[must_use]
 pub fn ad_spend_safe_for_min_profit(
     revenue: Money,
     non_ad_costs: Money,
@@ -145,7 +147,7 @@ pub fn profit_loss_int(revenue: Money, total_costs: Money) -> DomainResult<i128>
     profit_loss_amount(revenue, total_costs)
 }
 
-pub(crate) fn _dropshipping_anchor(_: Option<DropshipPOStatus>) {}
+pub(crate) const fn _dropshipping_anchor(_: Option<DropshipPOStatus>) {}
 
 impl_getters!(GuaranteedDropshipProfitQuote {
     revenue: Money,

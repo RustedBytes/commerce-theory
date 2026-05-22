@@ -35,7 +35,8 @@ impl CartLine {
         })
     }
 
-    pub fn quantity(&self) -> Quantity {
+    #[must_use]
+    pub const fn quantity(&self) -> Quantity {
         self.quantity
     }
 }
@@ -57,23 +58,11 @@ pub fn line_weight_total(line: &CartLine) -> DomainResult<Weight> {
 }
 
 pub fn cart_gross_total(items: &[CartLine]) -> DomainResult<Money> {
-    checked_sum(
-        items
-            .iter()
-            .map(line_gross_total)
-            .collect::<DomainResult<Vec<_>>>()?,
-        "cart_gross_total",
-    )
+    checked_result_sum(items.iter().map(line_gross_total), "cart_gross_total")
 }
 
 pub fn cart_net_total(items: &[CartLine]) -> DomainResult<Money> {
-    checked_sum(
-        items
-            .iter()
-            .map(line_net_total)
-            .collect::<DomainResult<Vec<_>>>()?,
-        "cart_net_total",
-    )
+    checked_result_sum(items.iter().map(line_net_total), "cart_net_total")
 }
 
 pub fn cart_discount_total(items: &[CartLine]) -> DomainResult<Money> {
@@ -84,13 +73,7 @@ pub fn cart_discount_total(items: &[CartLine]) -> DomainResult<Money> {
 }
 
 pub fn cart_weight_total(items: &[CartLine]) -> DomainResult<Weight> {
-    checked_sum(
-        items
-            .iter()
-            .map(line_weight_total)
-            .collect::<DomainResult<Vec<_>>>()?,
-        "cart_weight_total",
-    )
+    checked_result_sum(items.iter().map(line_weight_total), "cart_weight_total")
 }
 
 pub fn cart_quantity_total(items: &[CartLine]) -> DomainResult<Quantity> {
@@ -108,11 +91,13 @@ domain_struct! {
     }
 }
 
-pub fn coupon_can_be_applied(coupon: &Coupon, subtotal: Money, uses_before: Nat) -> bool {
+#[must_use]
+pub const fn coupon_can_be_applied(coupon: &Coupon, subtotal: Money, uses_before: Nat) -> bool {
     coupon.min_subtotal <= subtotal && uses_before < coupon.max_uses
 }
 
-pub fn subtotal_after_coupon_amount(subtotal: Money, coupon_amount: Money) -> Money {
+#[must_use]
+pub const fn subtotal_after_coupon_amount(subtotal: Money, coupon_amount: Money) -> Money {
     nat_sub(subtotal, coupon_amount)
 }
 
@@ -131,11 +116,13 @@ domain_struct! {
     }
 }
 
-pub fn shipping_available(method: &ShippingMethod, weight: Weight) -> bool {
+#[must_use]
+pub const fn shipping_available(method: &ShippingMethod, weight: Weight) -> bool {
     weight <= method.max_weight
 }
 
-pub fn shipping_charge(method: &ShippingMethod, subtotal: Money) -> Money {
+#[must_use]
+pub const fn shipping_charge(method: &ShippingMethod, subtotal: Money) -> Money {
     if method.free_threshold <= subtotal {
         0
     } else {
@@ -161,7 +148,7 @@ pub fn order_total(
     )
 }
 
-pub(crate) fn _inventory_anchor(_: &StockState) {}
+pub(crate) const fn _inventory_anchor(_: &StockState) {}
 
 impl_getters!(CartLine {
     sku: Sku,

@@ -5,7 +5,8 @@ use crate::inventory::*;
 
 pub type AllocationKey = (Nat, Nat);
 
-pub fn allocation_key_for_total(allocation: &Allocation) -> AllocationKey {
+#[must_use]
+pub const fn allocation_key_for_total(allocation: &Allocation) -> AllocationKey {
     allocation_key(allocation)
 }
 
@@ -24,7 +25,7 @@ pub fn allocation_quantity_for_key(
         allocations
             .iter()
             .filter(|allocation| allocation_key_for_total(allocation) == key)
-            .map(|allocation| allocation.quantity()),
+            .map(Allocation::quantity),
         "allocation_quantity_for_key",
     )
 }

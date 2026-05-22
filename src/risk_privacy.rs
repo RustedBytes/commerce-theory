@@ -2,6 +2,7 @@ use crate::foundation::*;
 use crate::marketing::*;
 
 domain_struct! {
+    #[allow(clippy::struct_field_names)]
     pub struct FraudPolicy {
         max_coupon_uses: Nat,
         max_orders_per_hour: Nat,
@@ -9,11 +10,13 @@ domain_struct! {
     }
 }
 
-pub fn coupon_uses_allowed(policy: &FraudPolicy, uses: Nat) -> bool {
+#[must_use]
+pub const fn coupon_uses_allowed(policy: &FraudPolicy, uses: Nat) -> bool {
     uses <= policy.max_coupon_uses
 }
 
-pub fn orders_per_hour_allowed(policy: &FraudPolicy, orders_per_hour: Nat) -> bool {
+#[must_use]
+pub const fn orders_per_hour_allowed(policy: &FraudPolicy, orders_per_hour: Nat) -> bool {
     orders_per_hour <= policy.max_orders_per_hour
 }
 
@@ -45,26 +48,34 @@ pub enum Action {
     ApproveReturn,
 }
 
-pub fn can_perform(role: Role, action: Action) -> bool {
+#[must_use]
+pub const fn can_perform(role: Role, action: Action) -> bool {
     matches!(
         (role, action),
         (Role::Admin, _)
-            | (Role::Support, Action::ViewOrder)
-            | (Role::Warehouse, Action::PackOrder)
-            | (Role::Warehouse, Action::ShipOrder)
-            | (Role::Warehouse, Action::AdjustStock)
-            | (Role::Warehouse, Action::ManageShipment)
-            | (Role::Manager, Action::ViewOrder)
-            | (Role::Manager, Action::OverridePrice)
-            | (Role::Manager, Action::ManageCRM)
-            | (Role::Manager, Action::ResolveSupportCase)
-            | (Role::Manager, Action::ApproveReturn)
-            | (Role::Support, Action::CreateSupportCase)
-            | (Role::Support, Action::ResolveSupportCase)
-            | (Role::Support, Action::ManageCRM)
-            | (Role::Finance, Action::ViewOrder)
-            | (Role::Finance, Action::IssueRefund)
-            | (Role::Finance, Action::ApproveReturn)
+            | (
+                Role::Support | Role::Manager | Role::Finance,
+                Action::ViewOrder
+            )
+            | (
+                Role::Warehouse,
+                Action::PackOrder
+                    | Action::ShipOrder
+                    | Action::AdjustStock
+                    | Action::ManageShipment
+            )
+            | (
+                Role::Manager,
+                Action::OverridePrice
+                    | Action::ManageCRM
+                    | Action::ResolveSupportCase
+                    | Action::ApproveReturn
+            )
+            | (
+                Role::Support,
+                Action::CreateSupportCase | Action::ResolveSupportCase | Action::ManageCRM
+            )
+            | (Role::Finance, Action::IssueRefund | Action::ApproveReturn)
     )
 }
 
@@ -176,7 +187,8 @@ domain_struct! {
     }
 }
 
-pub fn data_processing_allowed(permission: &DataProcessingPermission) -> bool {
+#[must_use]
+pub const fn data_processing_allowed(permission: &DataProcessingPermission) -> bool {
     permission.allowed
 }
 
@@ -204,48 +216,33 @@ pub enum AccessPurpose {
     Administration,
 }
 
-pub fn role_can_access_data(role: Role, purpose: AccessPurpose, category: DataCategory) -> bool {
+#[must_use]
+pub const fn role_can_access_data(
+    role: Role,
+    purpose: AccessPurpose,
+    category: DataCategory,
+) -> bool {
     matches!(
         (role, purpose, category),
         (Role::Admin, _, _)
             | (
                 Role::Support,
                 AccessPurpose::CustomerSupport,
-                DataCategory::OrderData
-            )
-            | (
-                Role::Support,
-                AccessPurpose::CustomerSupport,
-                DataCategory::ContactData
-            )
-            | (
-                Role::Support,
-                AccessPurpose::CustomerSupport,
-                DataCategory::SupportNotes
+                DataCategory::OrderData | DataCategory::ContactData | DataCategory::SupportNotes
             )
             | (
                 Role::Warehouse,
                 AccessPurpose::Fulfillment,
-                DataCategory::OrderData
-            )
-            | (
-                Role::Warehouse,
-                AccessPurpose::Fulfillment,
-                DataCategory::ContactData
+                DataCategory::OrderData | DataCategory::ContactData
             )
             | (
                 Role::Finance,
                 AccessPurpose::RefundProcessing,
-                DataCategory::OrderData
-            )
-            | (
-                Role::Finance,
-                AccessPurpose::RefundProcessing,
-                DataCategory::PaymentToken
+                DataCategory::OrderData | DataCategory::PaymentToken
             )
             | (
                 Role::Manager,
-                AccessPurpose::MarketingOperations,
+                AccessPurpose::MarketingOperations | AccessPurpose::Administration,
                 DataCategory::MarketingProfile
             )
             | (
@@ -258,14 +255,10 @@ pub fn role_can_access_data(role: Role, purpose: AccessPurpose, category: DataCa
                 AccessPurpose::Administration,
                 DataCategory::CustomerProfile
             )
-            | (
-                Role::Manager,
-                AccessPurpose::Administration,
-                DataCategory::MarketingProfile
-            )
     )
 }
 
+#[must_use]
 pub fn processing_allowed_for(
     permission: &DataProcessingPermission,
     purpose: ConsentPurpose,
@@ -284,6 +277,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn marketing_allowed(state: &MarketingConsentState) -> bool {
     can_send_marketing_message(state.subscription)
         && can_retarget(state.retargeting_consent)
@@ -294,13 +288,14 @@ pub fn marketing_allowed(state: &MarketingConsentState) -> bool {
         )
 }
 
+#[must_use]
 pub fn withdraw_marketing_consent(state: &MarketingConsentState) -> MarketingConsentState {
     MarketingConsentState::new(
         SubscriptionStatus::Unsubscribed,
         ConsentStatus::Denied,
         DataProcessingPermission::new(
-            *state.data_permission.purpose(),
-            *state.data_permission.basis(),
+            state.data_permission.purpose(),
+            state.data_permission.basis(),
             false,
         ),
     )
@@ -313,6 +308,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn within_retention_window(
     policy: &DataRetentionPolicy,
     now: Timestamp,
@@ -321,6 +317,7 @@ pub fn within_retention_window(
     collected_at <= now && timestamp_age(now, collected_at) <= policy.retention_window
 }
 
+#[must_use]
 pub fn retention_expired(
     policy: &DataRetentionPolicy,
     now: Timestamp,
@@ -329,6 +326,7 @@ pub fn retention_expired(
     collected_at <= now && policy.retention_window < timestamp_age(now, collected_at)
 }
 
+#[must_use]
 pub fn can_retain_personal_data(
     policy: &DataRetentionPolicy,
     now: Timestamp,
@@ -381,10 +379,12 @@ pub enum ErasureStatus {
     BlockedByLegalHold,
 }
 
+#[must_use]
 pub fn personal_data_usable(status: ErasureStatus) -> bool {
     status == ErasureStatus::Active
 }
 
+#[must_use]
 pub fn can_process_personal_data(
     status: ErasureStatus,
     permission: &DataProcessingPermission,
@@ -394,10 +394,12 @@ pub fn can_process_personal_data(
     personal_data_usable(status) && processing_allowed_for(permission, purpose, basis)
 }
 
+#[must_use]
 pub fn can_complete_erasure(status: ErasureStatus, legal_hold: bool) -> bool {
     status == ErasureStatus::Requested && !legal_hold
 }
 
+#[must_use]
 pub fn audit_log_appended(
     before: &[EntityAuditEvent],
     after: &[EntityAuditEvent],

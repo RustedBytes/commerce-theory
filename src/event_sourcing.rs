@@ -21,14 +21,16 @@ pub enum DomainEvent {
     ReturnApproved(ReturnAuthorizationId, OrderId, Money),
 }
 
-pub fn domain_event_is_crm(event: &DomainEvent) -> bool {
+#[must_use]
+pub const fn domain_event_is_crm(event: &DomainEvent) -> bool {
     matches!(
         event,
         DomainEvent::LeadConverted(_, _) | DomainEvent::SupportCaseOpened(_, _)
     )
 }
 
-pub fn domain_event_is_logistics(event: &DomainEvent) -> bool {
+#[must_use]
+pub const fn domain_event_is_logistics(event: &DomainEvent) -> bool {
     matches!(
         event,
         DomainEvent::ShipmentPlanned(_, _)
@@ -51,6 +53,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn stream_sequences_strictly_increase_from(last: Nat, events: &[EventEnvelope]) -> bool {
     let mut cursor = last;
     for event in events {
@@ -62,6 +65,7 @@ pub fn stream_sequences_strictly_increase_from(last: Nat, events: &[EventEnvelop
     true
 }
 
+#[must_use]
 pub fn stream_sequences_strictly_increase(stream: &EventStream) -> bool {
     stream_sequences_strictly_increase_from(0, &stream.events)
 }
@@ -72,7 +76,10 @@ domain_struct! {
     }
 }
 
-pub fn apply_webhook(s: &WebhookOrderingState, seq: Nat) -> DomainResult<WebhookOrderingState> {
+pub const fn apply_webhook(
+    s: &WebhookOrderingState,
+    seq: Nat,
+) -> DomainResult<WebhookOrderingState> {
     if s.last_sequence >= seq {
         return Err(ValidationError::Invariant(
             "webhook sequence must be newer than cursor",
@@ -97,10 +104,12 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn already_processed(key: IdempotencyKey, state: &IdempotencyState) -> bool {
     state.processed.contains(&key)
 }
 
+#[must_use]
 pub fn mark_processed(key: IdempotencyKey, state: &IdempotencyState) -> IdempotencyState {
     let mut processed = Vec::with_capacity(state.processed.len() + 1);
     processed.push(key);
@@ -140,7 +149,7 @@ pub fn apply_refund_issued_event(
     amount: Money,
 ) -> DomainResult<ValidSystemState> {
     Ok(ValidSystemState::new(
-        state.stock.clone(),
+        state.stock,
         issue_refund(&state.ledger, amount)?,
         state.tax_liability,
         state.crm_event_count,
@@ -191,7 +200,7 @@ pub fn apply_tax_liability_recorded_event(
     amount: Money,
 ) -> DomainResult<ValidSystemState> {
     Ok(ValidSystemState::new(
-        state.stock.clone(),
+        state.stock,
         state.ledger.clone(),
         checked_add(
             state.tax_liability,
@@ -205,7 +214,7 @@ pub fn apply_tax_liability_recorded_event(
 
 pub fn apply_crm_projected_event(state: &ValidSystemState) -> DomainResult<ValidSystemState> {
     Ok(ValidSystemState::new(
-        state.stock.clone(),
+        state.stock,
         state.ledger.clone(),
         state.tax_liability,
         checked_add(state.crm_event_count, 1, "apply_crm_projected_event")?,
@@ -215,7 +224,7 @@ pub fn apply_crm_projected_event(state: &ValidSystemState) -> DomainResult<Valid
 
 pub fn apply_logistics_projected_event(state: &ValidSystemState) -> DomainResult<ValidSystemState> {
     Ok(ValidSystemState::new(
-        state.stock.clone(),
+        state.stock,
         state.ledger.clone(),
         state.tax_liability,
         state.crm_event_count,
@@ -244,7 +253,7 @@ pub fn apply_domain_event(
     match event {
         DomainEvent::OrderPlaced(_, _) | DomainEvent::OrderShipped(_) => Ok(state.clone()),
         DomainEvent::PaymentCaptured(_, amount) => Ok(ValidSystemState::new(
-            state.stock.clone(),
+            state.stock,
             record_captured_payment(&state.ledger, *amount)?,
             state.tax_liability,
             state.crm_event_count,
@@ -355,4 +364,4 @@ pub fn project_ledger(
     Ok(ledger)
 }
 
-pub(crate) fn _risk_anchor(_: Option<Role>) {}
+pub(crate) const fn _risk_anchor(_: Option<Role>) {}

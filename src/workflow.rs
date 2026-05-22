@@ -16,13 +16,15 @@ pub enum OrderTransitionLabel {
     CancelBackorder,
 }
 
-pub fn order_transition_target(
+#[must_use]
+pub const fn order_transition_target(
     source: OrderStatus,
     label: OrderTransitionLabel,
 ) -> Option<OrderStatus> {
     match (source, label) {
         (OrderStatus::New, OrderTransitionLabel::CapturePayment) => Some(OrderStatus::Paid),
-        (OrderStatus::New, OrderTransitionLabel::CancelBeforePayment) => {
+        (OrderStatus::New, OrderTransitionLabel::CancelBeforePayment)
+        | (OrderStatus::Backordered, OrderTransitionLabel::CancelBackorder) => {
             Some(OrderStatus::Cancelled)
         }
         (OrderStatus::New, OrderTransitionLabel::MarkBackordered) => Some(OrderStatus::Backordered),
@@ -38,13 +40,11 @@ pub fn order_transition_target(
         (OrderStatus::Backordered, OrderTransitionLabel::ReceiveBackorderPayment) => {
             Some(OrderStatus::Paid)
         }
-        (OrderStatus::Backordered, OrderTransitionLabel::CancelBackorder) => {
-            Some(OrderStatus::Cancelled)
-        }
         _ => None,
     }
 }
 
+#[must_use]
 pub fn execute_order_trace(
     start: OrderStatus,
     trace: &[OrderTransitionLabel],
@@ -58,6 +58,7 @@ pub fn execute_order_trace(
     Some(states)
 }
 
+#[must_use]
 pub fn paid_fulfillment_trace() -> Vec<OrderTransitionLabel> {
     vec![
         OrderTransitionLabel::CapturePayment,
@@ -67,11 +68,13 @@ pub fn paid_fulfillment_trace() -> Vec<OrderTransitionLabel> {
     ]
 }
 
+#[must_use]
 pub fn unpaid_cancellation_trace() -> Vec<OrderTransitionLabel> {
     vec![OrderTransitionLabel::CancelBeforePayment]
 }
 
-pub fn terminal_order_status(status: OrderStatus) -> bool {
+#[must_use]
+pub const fn terminal_order_status(status: OrderStatus) -> bool {
     matches!(
         status,
         OrderStatus::Delivered | OrderStatus::Cancelled | OrderStatus::Refunded
@@ -82,7 +85,8 @@ pub fn terminal_order_status(status: OrderStatus) -> bool {
 pub struct OrderStatusLts;
 
 impl OrderStatusLts {
-    pub fn transition(
+    #[must_use]
+    pub const fn transition(
         self,
         source: OrderStatus,
         label: OrderTransitionLabel,
@@ -90,6 +94,7 @@ impl OrderStatusLts {
         order_transition_target(source, label)
     }
 
+    #[must_use]
     pub fn execute(
         self,
         start: OrderStatus,
@@ -99,7 +104,8 @@ impl OrderStatusLts {
     }
 }
 
-pub fn order_status_lts() -> OrderStatusLts {
+#[must_use]
+pub const fn order_status_lts() -> OrderStatusLts {
     OrderStatusLts
 }
 
@@ -116,7 +122,8 @@ pub enum DropshipPOTransitionLabel {
     ConfirmDelivery,
 }
 
-pub fn dropship_po_transition_target(
+#[must_use]
+pub const fn dropship_po_transition_target(
     source: DropshipPOStatus,
     label: DropshipPOTransitionLabel,
 ) -> Option<DropshipPOStatus> {
@@ -124,7 +131,9 @@ pub fn dropship_po_transition_target(
         (DropshipPOStatus::Created, DropshipPOTransitionLabel::Submit) => {
             Some(DropshipPOStatus::Submitted)
         }
-        (DropshipPOStatus::Created, DropshipPOTransitionLabel::CancelBeforeSubmit) => {
+        (DropshipPOStatus::Created, DropshipPOTransitionLabel::CancelBeforeSubmit)
+        | (DropshipPOStatus::Submitted, DropshipPOTransitionLabel::CancelSubmitted)
+        | (DropshipPOStatus::Accepted, DropshipPOTransitionLabel::CancelAccepted) => {
             Some(DropshipPOStatus::Cancelled)
         }
         (DropshipPOStatus::Submitted, DropshipPOTransitionLabel::Accept) => {
@@ -133,14 +142,8 @@ pub fn dropship_po_transition_target(
         (DropshipPOStatus::Submitted, DropshipPOTransitionLabel::Reject) => {
             Some(DropshipPOStatus::Rejected)
         }
-        (DropshipPOStatus::Submitted, DropshipPOTransitionLabel::CancelSubmitted) => {
-            Some(DropshipPOStatus::Cancelled)
-        }
         (DropshipPOStatus::Accepted, DropshipPOTransitionLabel::ShipAccepted) => {
             Some(DropshipPOStatus::Shipped)
-        }
-        (DropshipPOStatus::Accepted, DropshipPOTransitionLabel::CancelAccepted) => {
-            Some(DropshipPOStatus::Cancelled)
         }
         (DropshipPOStatus::Shipped, DropshipPOTransitionLabel::ConfirmDelivery) => {
             Some(DropshipPOStatus::Delivered)
@@ -149,6 +152,7 @@ pub fn dropship_po_transition_target(
     }
 }
 
+#[must_use]
 pub fn execute_dropship_po_trace(
     start: DropshipPOStatus,
     trace: &[DropshipPOTransitionLabel],
@@ -162,6 +166,7 @@ pub fn execute_dropship_po_trace(
     Some(states)
 }
 
+#[must_use]
 pub fn dropship_po_delivery_trace() -> Vec<DropshipPOTransitionLabel> {
     vec![
         DropshipPOTransitionLabel::Submit,
@@ -171,7 +176,8 @@ pub fn dropship_po_delivery_trace() -> Vec<DropshipPOTransitionLabel> {
     ]
 }
 
-pub fn terminal_dropship_po_status(status: DropshipPOStatus) -> bool {
+#[must_use]
+pub const fn terminal_dropship_po_status(status: DropshipPOStatus) -> bool {
     matches!(
         status,
         DropshipPOStatus::Delivered | DropshipPOStatus::Cancelled | DropshipPOStatus::Rejected
@@ -182,7 +188,8 @@ pub fn terminal_dropship_po_status(status: DropshipPOStatus) -> bool {
 pub struct DropshipPoLts;
 
 impl DropshipPoLts {
-    pub fn transition(
+    #[must_use]
+    pub const fn transition(
         self,
         source: DropshipPOStatus,
         label: DropshipPOTransitionLabel,
@@ -190,6 +197,7 @@ impl DropshipPoLts {
         dropship_po_transition_target(source, label)
     }
 
+    #[must_use]
     pub fn execute(
         self,
         start: DropshipPOStatus,
@@ -199,10 +207,12 @@ impl DropshipPoLts {
     }
 }
 
-pub fn dropship_po_lts() -> DropshipPoLts {
+#[must_use]
+pub const fn dropship_po_lts() -> DropshipPoLts {
     DropshipPoLts
 }
 
-pub fn dropship_polts() -> DropshipPoLts {
+#[must_use]
+pub const fn dropship_polts() -> DropshipPoLts {
     DropshipPoLts
 }

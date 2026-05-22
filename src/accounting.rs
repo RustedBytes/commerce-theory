@@ -22,11 +22,13 @@ domain_struct! {
     }
 }
 
-pub fn debit(account: LedgerAccount, amount: Money) -> Posting {
+#[must_use]
+pub const fn debit(account: LedgerAccount, amount: Money) -> Posting {
     Posting::new(account, PostingSide::Debit, amount)
 }
 
-pub fn credit(account: LedgerAccount, amount: Money) -> Posting {
+#[must_use]
+pub const fn credit(account: LedgerAccount, amount: Money) -> Posting {
     Posting::new(account, PostingSide::Credit, amount)
 }
 
@@ -70,6 +72,7 @@ impl BalancedJournalEntry {
         Ok(Self { postings })
     }
 
+    #[must_use]
     pub fn postings(&self) -> &[Posting] {
         &self.postings
     }

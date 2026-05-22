@@ -10,7 +10,8 @@ pub enum Confidence {
     High,
 }
 
-pub fn confidence_allows_auto_replenish(confidence: Confidence) -> bool {
+#[must_use]
+pub const fn confidence_allows_auto_replenish(confidence: Confidence) -> bool {
     matches!(confidence, Confidence::Medium | Confidence::High)
 }
 
@@ -24,6 +25,7 @@ domain_struct! {
 }
 
 domain_struct! {
+    #[allow(clippy::struct_field_names)]
     pub struct SupplierQualityMetrics {
         defect_rate_bps: Nat,
         late_shipment_rate_bps: Nat,
@@ -32,6 +34,7 @@ domain_struct! {
 }
 
 domain_struct! {
+    #[allow(clippy::struct_field_names)]
     pub struct SupplierRiskPolicy {
         max_defect_rate_bps: Nat,
         max_late_shipment_rate_bps: Nat,
@@ -69,7 +72,7 @@ impl ApprovedSupplierQuality {
     }
 }
 
-pub(crate) fn _post_purchase_anchor(_: Option<SubscriptionLifecycleStatus>) {}
+pub(crate) const fn _post_purchase_anchor(_: Option<SubscriptionLifecycleStatus>) {}
 
 impl_getters!(ApprovedSupplierQuality {
     supplier: DropshipSupplier,

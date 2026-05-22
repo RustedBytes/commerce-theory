@@ -76,7 +76,7 @@ pub struct GiftCardRedemption {
 }
 
 impl GiftCardRedemption {
-    pub fn try_new(card: GiftCard, amount: Money) -> DomainResult<Self> {
+    pub const fn try_new(card: GiftCard, amount: Money) -> DomainResult<Self> {
         if amount > card.balance {
             return Err(ValidationError::Invariant(
                 "gift-card redemption exceeds balance",
@@ -86,10 +86,12 @@ impl GiftCardRedemption {
     }
 }
 
-pub fn gift_card_balance_after_redeem(redemption: &GiftCardRedemption) -> Money {
+#[must_use]
+pub const fn gift_card_balance_after_redeem(redemption: &GiftCardRedemption) -> Money {
     nat_sub(redemption.card.balance, redemption.amount)
 }
 
+#[must_use]
 pub fn gift_card_valid_at(now: Timestamp, card: &GiftCard) -> bool {
     now <= card.expires_at
 }
@@ -102,7 +104,7 @@ pub struct Chargeback {
 }
 
 impl Chargeback {
-    pub fn try_new(payment_amount: Money, chargeback_amount: Money) -> DomainResult<Self> {
+    pub const fn try_new(payment_amount: Money, chargeback_amount: Money) -> DomainResult<Self> {
         if chargeback_amount > payment_amount {
             return Err(ValidationError::Invariant(
                 "chargeback exceeds payment amount",
@@ -201,7 +203,7 @@ impl EventBackedCashflowPlan {
     }
 }
 
-pub(crate) fn _event_anchor(_: Option<DomainEvent>) {}
+pub(crate) const fn _event_anchor(_: Option<DomainEvent>) {}
 
 impl_getters!(SubscriptionPlan {
     price: Money,

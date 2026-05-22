@@ -66,44 +66,52 @@ impl Order {
         })
     }
 
-    pub fn id(&self) -> OrderId {
+    #[must_use]
+    pub const fn id(&self) -> OrderId {
         self.id
     }
 
+    #[must_use]
     pub fn items(&self) -> &[CartLine] {
         &self.items
     }
 
-    pub fn total(&self) -> Money {
+    #[must_use]
+    pub const fn total(&self) -> Money {
         self.total
     }
 
-    pub fn currency(&self) -> Currency {
+    #[must_use]
+    pub const fn currency(&self) -> Currency {
         self.currency
     }
 
-    pub fn shipping_method(&self) -> &ShippingMethod {
+    #[must_use]
+    pub const fn shipping_method(&self) -> &ShippingMethod {
         &self.shipping_method
     }
 
-    pub fn tax(&self) -> Money {
+    #[must_use]
+    pub const fn tax(&self) -> Money {
         self.tax
     }
 }
 
-pub fn can_order_transition(source: OrderStatus, target: OrderStatus) -> bool {
+#[must_use]
+pub const fn can_order_transition(source: OrderStatus, target: OrderStatus) -> bool {
     matches!(
         (source, target),
-        (OrderStatus::New, OrderStatus::Paid)
-            | (OrderStatus::New, OrderStatus::Cancelled)
-            | (OrderStatus::New, OrderStatus::Backordered)
-            | (OrderStatus::Paid, OrderStatus::Packed)
-            | (OrderStatus::Paid, OrderStatus::Refunded)
+        (
+            OrderStatus::New | OrderStatus::Backordered,
+            OrderStatus::Paid | OrderStatus::Cancelled
+        ) | (OrderStatus::New, OrderStatus::Backordered)
+            | (
+                OrderStatus::Paid,
+                OrderStatus::Packed | OrderStatus::Refunded
+            )
             | (OrderStatus::Packed, OrderStatus::Shipped)
             | (OrderStatus::Shipped, OrderStatus::Delivered)
             | (OrderStatus::Delivered, OrderStatus::Refunded)
-            | (OrderStatus::Backordered, OrderStatus::Paid)
-            | (OrderStatus::Backordered, OrderStatus::Cancelled)
     )
 }
 
@@ -123,6 +131,7 @@ pub enum CanOrderTransition {
 }
 
 impl CanOrderTransition {
+    #[must_use]
     pub const fn source(self) -> OrderStatus {
         match self {
             Self::NewPaid | Self::NewCancelled | Self::NewBackordered => OrderStatus::New,
@@ -134,22 +143,21 @@ impl CanOrderTransition {
         }
     }
 
+    #[must_use]
     pub const fn target(self) -> OrderStatus {
         match self {
-            Self::NewPaid => OrderStatus::Paid,
-            Self::NewCancelled => OrderStatus::Cancelled,
+            Self::NewPaid | Self::BackorderedPaid => OrderStatus::Paid,
+            Self::NewCancelled | Self::BackorderedCancelled => OrderStatus::Cancelled,
             Self::NewBackordered => OrderStatus::Backordered,
             Self::PaidPacked => OrderStatus::Packed,
-            Self::PaidRefunded => OrderStatus::Refunded,
+            Self::PaidRefunded | Self::DeliveredRefunded => OrderStatus::Refunded,
             Self::PackedShipped => OrderStatus::Shipped,
             Self::ShippedDelivered => OrderStatus::Delivered,
-            Self::DeliveredRefunded => OrderStatus::Refunded,
-            Self::BackorderedPaid => OrderStatus::Paid,
-            Self::BackorderedCancelled => OrderStatus::Cancelled,
         }
     }
 
-    pub fn from_statuses(source: OrderStatus, target: OrderStatus) -> Option<Self> {
+    #[must_use]
+    pub const fn from_statuses(source: OrderStatus, target: OrderStatus) -> Option<Self> {
         match (source, target) {
             (OrderStatus::New, OrderStatus::Paid) => Some(Self::NewPaid),
             (OrderStatus::New, OrderStatus::Cancelled) => Some(Self::NewCancelled),
@@ -190,7 +198,7 @@ order_marker!(CancelledOrder, Cancelled);
 order_marker!(RefundedOrder, Refunded);
 order_marker!(BackorderedOrder, Backordered);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TypedOrder<S: OrderStatusMarker> {
     pub(crate) id: OrderId,
@@ -200,7 +208,7 @@ pub struct TypedOrder<S: OrderStatusMarker> {
 }
 
 impl<S: OrderStatusMarker> TypedOrder<S> {
-    pub fn try_new(id: OrderId, total: Money, currency: Currency) -> DomainResult<Self> {
+    pub const fn try_new(id: OrderId, total: Money, currency: Currency) -> DomainResult<Self> {
         if total == 0 {
             return Err(ValidationError::Invariant(
                 "typed order total must be positive",
@@ -214,15 +222,18 @@ impl<S: OrderStatusMarker> TypedOrder<S> {
         })
     }
 
-    pub fn id(&self) -> OrderId {
+    #[must_use]
+    pub const fn id(&self) -> OrderId {
         self.id
     }
 
-    pub fn total(&self) -> Money {
+    #[must_use]
+    pub const fn total(&self) -> Money {
         self.total
     }
 
-    pub fn currency(&self) -> Currency {
+    #[must_use]
+    pub const fn currency(&self) -> Currency {
         self.currency
     }
 }
@@ -268,7 +279,7 @@ payment_marker!(FailedPayment, Failed);
 payment_marker!(VoidedPayment, Voided);
 payment_marker!(RefundedPayment, Refunded);
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TypedPayment<S: PaymentStateMarker> {
     pub(crate) id: PaymentId,
@@ -279,7 +290,7 @@ pub struct TypedPayment<S: PaymentStateMarker> {
 }
 
 impl<S: PaymentStateMarker> TypedPayment<S> {
-    pub fn try_new(
+    pub const fn try_new(
         id: PaymentId,
         order_id: OrderId,
         amount: Money,
@@ -300,7 +311,8 @@ impl<S: PaymentStateMarker> TypedPayment<S> {
     }
 }
 
-pub fn authorize_payment(p: TypedPayment<CreatedPayment>) -> TypedPayment<AuthorizedPayment> {
+#[must_use]
+pub const fn authorize_payment(p: TypedPayment<CreatedPayment>) -> TypedPayment<AuthorizedPayment> {
     TypedPayment {
         id: p.id,
         order_id: p.order_id,
@@ -310,7 +322,8 @@ pub fn authorize_payment(p: TypedPayment<CreatedPayment>) -> TypedPayment<Author
     }
 }
 
-pub fn capture_payment(
+#[must_use]
+pub const fn capture_payment(
     p: TypedPayment<AuthorizedPayment>,
 ) -> (TypedPayment<CapturedPaymentState>, CapturedPayment) {
     let receipt = CapturedPayment::new(p.order_id, p.amount, p.currency);
@@ -355,26 +368,30 @@ pub struct PaymentLedger {
 }
 
 impl PaymentLedger {
-    pub fn try_new(captured: Money, refunded: Money) -> DomainResult<Self> {
+    pub const fn try_new(captured: Money, refunded: Money) -> DomainResult<Self> {
         if refunded > captured {
             return Err(ValidationError::Invariant("refunded exceeds captured"));
         }
         Ok(Self { captured, refunded })
     }
 
-    pub fn captured(&self) -> Money {
+    #[must_use]
+    pub const fn captured(&self) -> Money {
         self.captured
     }
 
-    pub fn refunded(&self) -> Money {
+    #[must_use]
+    pub const fn refunded(&self) -> Money {
         self.refunded
     }
 }
 
-pub fn remaining_refund_amount(ledger: &PaymentLedger) -> Money {
+#[must_use]
+pub const fn remaining_refund_amount(ledger: &PaymentLedger) -> Money {
     nat_sub(ledger.captured, ledger.refunded)
 }
 
+#[must_use]
 pub fn can_refund(ledger: &PaymentLedger, amount: Money) -> bool {
     ledger
         .refunded

@@ -24,6 +24,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn customer_can_buy_wholesale(customer: &Customer) -> bool {
     customer.kind == CustomerKind::WholesaleAccount && customer.wholesale_approved
 }
@@ -35,7 +36,8 @@ pub enum PaymentTerms {
     NetDays(Nat),
 }
 
-pub fn payment_terms_allowed(mode: TradeMode, terms: PaymentTerms) -> bool {
+#[must_use]
+pub const fn payment_terms_allowed(mode: TradeMode, terms: PaymentTerms) -> bool {
     !matches!((mode, terms), (TradeMode::Retail, PaymentTerms::NetDays(_)))
 }
 
@@ -93,7 +95,8 @@ impl TradePriceBookEntry {
     }
 }
 
-pub fn unit_price_for_trade_mode(mode: TradeMode, entry: &TradePriceBookEntry) -> Money {
+#[must_use]
+pub const fn unit_price_for_trade_mode(mode: TradeMode, entry: &TradePriceBookEntry) -> Money {
     match mode {
         TradeMode::Retail => entry.retail_unit_price,
         TradeMode::Wholesale => entry.wholesale_unit_price,
@@ -190,21 +193,15 @@ pub fn wholesale_line_net_total(line: &WholesaleLine) -> DomainResult<Money> {
 }
 
 pub fn wholesale_order_net_total(lines: &[WholesaleLine]) -> DomainResult<Money> {
-    checked_sum(
-        lines
-            .iter()
-            .map(wholesale_line_net_total)
-            .collect::<DomainResult<Vec<_>>>()?,
+    checked_result_sum(
+        lines.iter().map(wholesale_line_net_total),
         "wholesale_order_net_total",
     )
 }
 
 pub fn wholesale_retail_equivalent_total(lines: &[WholesaleLine]) -> DomainResult<Money> {
-    checked_sum(
-        lines
-            .iter()
-            .map(wholesale_line_retail_equivalent_total)
-            .collect::<DomainResult<Vec<_>>>()?,
+    checked_result_sum(
+        lines.iter().map(wholesale_line_retail_equivalent_total),
         "wholesale_retail_equivalent_total",
     )
 }
@@ -239,6 +236,7 @@ impl WholesaleCreditAccount {
     }
 }
 
+#[must_use]
 pub fn can_place_wholesale_credit_order(
     account: &WholesaleCreditAccount,
     order_total: Money,
@@ -249,7 +247,7 @@ pub fn can_place_wholesale_credit_order(
         .is_some_and(|total| total <= account.credit_limit)
 }
 
-pub(crate) fn _marketing_anchor(_: Option<ConsentStatus>) {}
+pub(crate) const fn _marketing_anchor(_: Option<ConsentStatus>) {}
 
 impl_getters!(TradePriceBookEntry {
     sku: Sku,

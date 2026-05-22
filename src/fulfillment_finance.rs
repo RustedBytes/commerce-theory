@@ -12,7 +12,7 @@ pub struct ExchangeRate {
 }
 
 impl ExchangeRate {
-    pub fn try_new(
+    pub const fn try_new(
         source: Currency,
         target: Currency,
         numerator: Nat,
@@ -34,6 +34,7 @@ impl ExchangeRate {
     }
 }
 
+#[must_use]
 pub fn fx_quote_fresh(now: Timestamp, max_age: Duration, rate: &ExchangeRate) -> bool {
     rate.observed_at <= now && timestamp_age(now, rate.observed_at) <= max_age
 }
@@ -99,7 +100,7 @@ pub fn tax_amount_rounded(
     rate: &TaxRate,
     taxable_amount: Money,
 ) -> DomainResult<Money> {
-    round_bps_amount(mode, taxable_amount, *rate.bps())
+    round_bps_amount(mode, taxable_amount, rate.bps())
 }
 
 domain_struct! {
@@ -152,7 +153,8 @@ impl CarrierQuote {
     }
 }
 
-pub fn abs_diff_nat(a: Nat, b: Nat) -> Nat {
+#[must_use]
+pub const fn abs_diff_nat(a: Nat, b: Nat) -> Nat {
     a.abs_diff(b)
 }
 
@@ -165,7 +167,7 @@ pub struct ReconciliationWithinTolerance {
 }
 
 impl ReconciliationWithinTolerance {
-    pub fn try_new(expected: Money, actual: Money, tolerance: Money) -> DomainResult<Self> {
+    pub const fn try_new(expected: Money, actual: Money, tolerance: Money) -> DomainResult<Self> {
         if abs_diff_nat(expected, actual) > tolerance {
             return Err(ValidationError::Invariant(
                 "reconciliation diff exceeds tolerance",
@@ -179,7 +181,7 @@ impl ReconciliationWithinTolerance {
     }
 }
 
-pub(crate) fn _merchandising_anchor(_: Option<PromotionStackingPolicy>) {}
+pub(crate) const fn _merchandising_anchor(_: Option<PromotionStackingPolicy>) {}
 
 impl_getters!(ExchangeRate {
     source: Currency,

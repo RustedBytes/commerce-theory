@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use crate::foundation::*;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct StockState {
     pub(crate) sku: Sku,
@@ -11,7 +11,7 @@ pub struct StockState {
 }
 
 impl StockState {
-    pub fn try_new(sku: Sku, total: Quantity, reserved: Quantity) -> DomainResult<Self> {
+    pub const fn try_new(sku: Sku, total: Quantity, reserved: Quantity) -> DomainResult<Self> {
         if reserved > total {
             return Err(ValidationError::Invariant("reserved stock exceeds total"));
         }
@@ -22,24 +22,29 @@ impl StockState {
         })
     }
 
-    pub fn sku(&self) -> Sku {
+    #[must_use]
+    pub const fn sku(&self) -> Sku {
         self.sku
     }
 
-    pub fn total(&self) -> Quantity {
+    #[must_use]
+    pub const fn total(&self) -> Quantity {
         self.total
     }
 
-    pub fn reserved(&self) -> Quantity {
+    #[must_use]
+    pub const fn reserved(&self) -> Quantity {
         self.reserved
     }
 }
 
-pub fn available_stock(s: &StockState) -> Quantity {
+#[must_use]
+pub const fn available_stock(s: &StockState) -> Quantity {
     nat_sub(s.total, s.reserved)
 }
 
-pub fn can_reserve(s: &StockState, q: Quantity) -> bool {
+#[must_use]
+pub const fn can_reserve(s: &StockState, q: Quantity) -> bool {
     q <= available_stock(s)
 }
 
@@ -52,7 +57,7 @@ pub fn reserve_stock(s: &StockState, q: Quantity) -> DomainResult<StockState> {
     StockState::try_new(s.sku, s.total, checked_add(s.reserved, q, "reserve_stock")?)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VersionedStock {
     pub(crate) stock: StockState,
@@ -72,15 +77,18 @@ impl VersionedStock {
         })
     }
 
-    pub fn from_stock(stock: StockState, version: Nat) -> Self {
+    #[must_use]
+    pub const fn from_stock(stock: StockState, version: Nat) -> Self {
         Self { stock, version }
     }
 
-    pub fn stock(&self) -> &StockState {
-        &self.stock
+    #[must_use]
+    pub const fn stock(&self) -> StockState {
+        self.stock
     }
 
-    pub fn version(&self) -> Nat {
+    #[must_use]
+    pub const fn version(&self) -> Nat {
         self.version
     }
 }
@@ -142,7 +150,7 @@ impl PickTask {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PackTask {
     pub(crate) picked: Quantity,
@@ -150,11 +158,17 @@ pub struct PackTask {
 }
 
 impl PackTask {
-    pub fn try_new(picked: Quantity, packed: Quantity) -> DomainResult<Self> {
-        if packed > picked {
+    pub const fn try_new(
+        source_quantity: Quantity,
+        packed_quantity: Quantity,
+    ) -> DomainResult<Self> {
+        if packed_quantity > source_quantity {
             return Err(ValidationError::Invariant("packed exceeds picked"));
         }
-        Ok(Self { picked, packed })
+        Ok(Self {
+            picked: source_quantity,
+            packed: packed_quantity,
+        })
     }
 }
 
@@ -166,7 +180,7 @@ pub struct WarehouseShipment {
 }
 
 impl WarehouseShipment {
-    pub fn try_new(packed: Quantity, shipped: Quantity) -> DomainResult<Self> {
+    pub const fn try_new(packed: Quantity, shipped: Quantity) -> DomainResult<Self> {
         if shipped > packed {
             return Err(ValidationError::Invariant("shipped exceeds packed"));
         }
@@ -198,11 +212,13 @@ impl Allocation {
         Ok(Self { node, quantity })
     }
 
-    pub fn node(&self) -> &InventoryNode {
+    #[must_use]
+    pub const fn node(&self) -> &InventoryNode {
         &self.node
     }
 
-    pub fn quantity(&self) -> Quantity {
+    #[must_use]
+    pub const fn quantity(&self) -> Quantity {
         self.quantity
     }
 }
@@ -218,10 +234,12 @@ pub fn allocations_available_total(allocations: &[Allocation]) -> DomainResult<Q
     )
 }
 
-pub fn allocation_key(a: &Allocation) -> (Nat, Nat) {
+#[must_use]
+pub const fn allocation_key(a: &Allocation) -> (Nat, Nat) {
     (a.node.warehouse.id, a.node.stock.sku.value())
 }
 
+#[must_use]
 pub fn allocation_keys_distinct(allocations: &[Allocation]) -> bool {
     let mut seen = HashSet::new();
     allocations.iter().all(|a| seen.insert(allocation_key(a)))
@@ -247,10 +265,12 @@ impl FulfillmentPlan {
         })
     }
 
-    pub fn requested(&self) -> Quantity {
+    #[must_use]
+    pub const fn requested(&self) -> Quantity {
         self.requested
     }
 
+    #[must_use]
     pub fn allocations(&self) -> &[Allocation] {
         &self.allocations
     }
@@ -265,7 +285,11 @@ pub struct DistinctFulfillmentPlan {
 
 impl DistinctFulfillmentPlan {
     pub fn try_new(requested: Quantity, allocations: Vec<Allocation>) -> DomainResult<Self> {
-        FulfillmentPlan::try_new(requested, allocations.clone())?;
+        if allocations_total(&allocations)? != requested {
+            return Err(ValidationError::Invariant(
+                "allocations must exactly cover request",
+            ));
+        }
         if !allocation_keys_distinct(&allocations) {
             return Err(ValidationError::Invariant(
                 "allocation keys must be distinct",
@@ -278,20 +302,21 @@ impl DistinctFulfillmentPlan {
     }
 }
 
-pub fn release_reserved_stock(s: &StockState, q: Quantity) -> DomainResult<StockState> {
+pub const fn release_reserved_stock(s: &StockState, q: Quantity) -> DomainResult<StockState> {
     if q > s.reserved {
         return Err(ValidationError::InventoryInvariantFailed);
     }
     StockState::try_new(s.sku, s.total, nat_sub(s.reserved, q))
 }
 
-pub fn confirm_reserved_shipment(s: &StockState, q: Quantity) -> DomainResult<StockState> {
+pub const fn confirm_reserved_shipment(s: &StockState, q: Quantity) -> DomainResult<StockState> {
     if q > s.reserved {
         return Err(ValidationError::InventoryInvariantFailed);
     }
     StockState::try_new(s.sku, nat_sub(s.total, q), nat_sub(s.reserved, q))
 }
 
+#[must_use]
 pub fn compare_and_swap_reserve(
     s: &VersionedStock,
     q: Quantity,
@@ -309,7 +334,8 @@ pub struct ReservationAttempt {
 }
 
 impl ReservationAttempt {
-    pub fn new(stock: VersionedStock, quantity: Quantity, expected_version: Nat) -> Self {
+    #[must_use]
+    pub const fn new(stock: VersionedStock, quantity: Quantity, expected_version: Nat) -> Self {
         Self {
             stock,
             quantity,
@@ -318,6 +344,7 @@ impl ReservationAttempt {
     }
 }
 
+#[must_use]
 pub fn commit_reservation_attempt(attempt: &ReservationAttempt) -> Option<VersionedStock> {
     compare_and_swap_reserve(&attempt.stock, attempt.quantity, attempt.expected_version)
 }
@@ -349,7 +376,7 @@ pub enum ReservationStatus {
     Released,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct TimedReservation {
     pub(crate) stock: StockState,
@@ -380,10 +407,12 @@ impl TimedReservation {
     }
 }
 
+#[must_use]
 pub fn reservation_expired_at(now: Timestamp, reservation: &TimedReservation) -> bool {
     reservation.expires_at < now
 }
 
+#[must_use]
 pub fn reservation_active_at(now: Timestamp, reservation: &TimedReservation) -> bool {
     reservation.status == ReservationStatus::Active && now <= reservation.expires_at
 }
@@ -489,10 +518,12 @@ pub struct SerialNumber {
 }
 
 impl SerialNumber {
+    #[must_use]
     pub const fn new(value: Nat) -> Self {
         Self { value }
     }
 
+    #[must_use]
     pub const fn value(self) -> Nat {
         self.value
     }
@@ -507,6 +538,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn serial_numbers_distinct(units: &[SerializedInventoryUnit]) -> bool {
     let mut seen = HashSet::new();
     units.iter().all(|unit| seen.insert(unit.serial.value()))
@@ -537,6 +569,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn lot_usable_at(now: Timestamp, lot: &InventoryLot) -> bool {
     now <= lot.expires_at && lot.quantity > 0
 }
@@ -571,6 +604,7 @@ impl SkuSubstitution {
     }
 }
 
+#[must_use]
 pub fn allocation_warehouse_ids(allocations: &[Allocation]) -> Vec<Id> {
     allocations
         .iter()
@@ -593,8 +627,8 @@ impl SplitFulfillmentPlan {
         second_warehouse: Warehouse,
     ) -> DomainResult<Self> {
         let ids = allocation_warehouse_ids(plan.allocations());
-        if !ids.contains(first_warehouse.id())
-            || !ids.contains(second_warehouse.id())
+        if !ids.contains(&first_warehouse.id())
+            || !ids.contains(&second_warehouse.id())
             || first_warehouse.id() == second_warehouse.id()
         {
             return Err(ValidationError::InventoryInvariantFailed);

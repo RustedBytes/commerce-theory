@@ -15,7 +15,8 @@ domain_struct! {
     }
 }
 
-pub fn supplier_can_receive_orders(supplier: &DropshipSupplier) -> bool {
+#[must_use]
+pub const fn supplier_can_receive_orders(supplier: &DropshipSupplier) -> bool {
     supplier.active && !supplier.suspended
 }
 
@@ -51,6 +52,7 @@ impl SupplierDailyCapacity {
     }
 }
 
+#[must_use]
 pub fn can_add_supplier_orders(capacity: &SupplierDailyCapacity, new_orders: Nat) -> bool {
     capacity
         .orders_accepted_today
@@ -105,20 +107,24 @@ impl DropshipOffer {
         })
     }
 
-    pub fn sku(&self) -> Sku {
+    #[must_use]
+    pub const fn sku(&self) -> Sku {
         self.sku
     }
 
-    pub fn sale_unit_price(&self) -> Money {
+    #[must_use]
+    pub const fn sale_unit_price(&self) -> Money {
         self.sale_unit_price
     }
 
-    pub fn currency(&self) -> Currency {
+    #[must_use]
+    pub const fn currency(&self) -> Currency {
         self.currency
     }
 }
 
-pub fn dropship_offer_can_be_sold(offer: &DropshipOffer) -> bool {
+#[must_use]
+pub const fn dropship_offer_can_be_sold(offer: &DropshipOffer) -> bool {
     supplier_can_receive_orders(&offer.supplier) && offer.active && offer.available_qty > 0
 }
 
@@ -164,6 +170,7 @@ impl SupplierReservation {
     }
 }
 
+#[must_use]
 pub fn reservation_confirmed(r: &SupplierReservation) -> bool {
     r.status == SupplierReservationStatus::Confirmed
 }
@@ -213,11 +220,13 @@ impl DropshipLine {
         })
     }
 
-    pub fn offer(&self) -> &DropshipOffer {
+    #[must_use]
+    pub const fn offer(&self) -> &DropshipOffer {
         &self.offer
     }
 
-    pub fn quantity(&self) -> Quantity {
+    #[must_use]
+    pub const fn quantity(&self) -> Quantity {
         self.quantity
     }
 }
@@ -273,31 +282,22 @@ impl ReservedDropshipLine {
 }
 
 pub fn dropship_sale_net_total(lines: &[DropshipLine]) -> DomainResult<Money> {
-    checked_sum(
-        lines
-            .iter()
-            .map(dropship_line_customer_net)
-            .collect::<DomainResult<Vec<_>>>()?,
+    checked_result_sum(
+        lines.iter().map(dropship_line_customer_net),
         "dropship_sale_net_total",
     )
 }
 
 pub fn dropship_supplier_cost_total(lines: &[DropshipLine]) -> DomainResult<Money> {
-    checked_sum(
-        lines
-            .iter()
-            .map(dropship_line_supplier_cost)
-            .collect::<DomainResult<Vec<_>>>()?,
+    checked_result_sum(
+        lines.iter().map(dropship_line_supplier_cost),
         "dropship_supplier_cost_total",
     )
 }
 
 pub fn dropship_weight_total(lines: &[DropshipLine]) -> DomainResult<Weight> {
-    checked_sum(
-        lines
-            .iter()
-            .map(dropship_line_weight)
-            .collect::<DomainResult<Vec<_>>>()?,
+    checked_result_sum(
+        lines.iter().map(dropship_line_weight),
         "dropship_weight_total",
     )
 }
@@ -311,7 +311,11 @@ domain_struct! {
     }
 }
 
-pub fn dropship_shipping_quote_can_ship(quote: &DropshipShippingQuote, weight: Weight) -> bool {
+#[must_use]
+pub const fn dropship_shipping_quote_can_ship(
+    quote: &DropshipShippingQuote,
+    weight: Weight,
+) -> bool {
     weight <= quote.max_weight
 }
 
@@ -370,25 +374,33 @@ impl DropshipPurchaseOrder {
         })
     }
 
+    #[must_use]
     pub fn lines(&self) -> &[DropshipLine] {
         &self.lines
     }
 }
 
-pub fn can_dropship_po_transition(source: DropshipPOStatus, target: DropshipPOStatus) -> bool {
+#[must_use]
+pub const fn can_dropship_po_transition(
+    source: DropshipPOStatus,
+    target: DropshipPOStatus,
+) -> bool {
     matches!(
         (source, target),
-        (DropshipPOStatus::Created, DropshipPOStatus::Submitted)
-            | (DropshipPOStatus::Created, DropshipPOStatus::Cancelled)
-            | (DropshipPOStatus::Submitted, DropshipPOStatus::Accepted)
-            | (DropshipPOStatus::Submitted, DropshipPOStatus::Rejected)
-            | (DropshipPOStatus::Submitted, DropshipPOStatus::Cancelled)
-            | (DropshipPOStatus::Accepted, DropshipPOStatus::Shipped)
-            | (DropshipPOStatus::Accepted, DropshipPOStatus::Cancelled)
-            | (DropshipPOStatus::Shipped, DropshipPOStatus::Delivered)
+        (
+            DropshipPOStatus::Created,
+            DropshipPOStatus::Submitted | DropshipPOStatus::Cancelled
+        ) | (
+            DropshipPOStatus::Submitted,
+            DropshipPOStatus::Accepted | DropshipPOStatus::Rejected | DropshipPOStatus::Cancelled
+        ) | (
+            DropshipPOStatus::Accepted,
+            DropshipPOStatus::Shipped | DropshipPOStatus::Cancelled
+        ) | (DropshipPOStatus::Shipped, DropshipPOStatus::Delivered)
     )
 }
 
+#[must_use]
 pub fn dropship_sla_safe(
     supplier: &DropshipSupplier,
     quote: &DropshipShippingQuote,
@@ -475,7 +487,7 @@ impl DropshipReturnRequest {
     }
 }
 
-pub(crate) fn _b2b_anchor(_: Option<TradeMode>) {}
+pub(crate) const fn _b2b_anchor(_: Option<TradeMode>) {}
 
 impl_getters!(DropshipOffer {
     supplier: DropshipSupplier,

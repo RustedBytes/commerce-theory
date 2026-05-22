@@ -21,25 +21,32 @@ pub enum ShipmentStatus {
     Cancelled,
 }
 
-pub fn can_shipment_transition(source: ShipmentStatus, target: ShipmentStatus) -> bool {
+#[must_use]
+pub const fn can_shipment_transition(source: ShipmentStatus, target: ShipmentStatus) -> bool {
     matches!(
         (source, target),
-        (ShipmentStatus::Planned, ShipmentStatus::Allocated)
-            | (ShipmentStatus::Planned, ShipmentStatus::Cancelled)
-            | (ShipmentStatus::Allocated, ShipmentStatus::Packed)
-            | (ShipmentStatus::Allocated, ShipmentStatus::Cancelled)
-            | (ShipmentStatus::Packed, ShipmentStatus::InTransit)
-            | (ShipmentStatus::InTransit, ShipmentStatus::OutForDelivery)
-            | (ShipmentStatus::InTransit, ShipmentStatus::Exception)
-            | (ShipmentStatus::OutForDelivery, ShipmentStatus::Delivered)
-            | (ShipmentStatus::OutForDelivery, ShipmentStatus::Exception)
-            | (ShipmentStatus::Exception, ShipmentStatus::InTransit)
-            | (ShipmentStatus::Exception, ShipmentStatus::Returned)
+        (
+            ShipmentStatus::Planned,
+            ShipmentStatus::Allocated | ShipmentStatus::Cancelled
+        ) | (
+            ShipmentStatus::Allocated,
+            ShipmentStatus::Packed | ShipmentStatus::Cancelled
+        ) | (
+            ShipmentStatus::Packed | ShipmentStatus::Exception,
+            ShipmentStatus::InTransit
+        ) | (
+            ShipmentStatus::InTransit,
+            ShipmentStatus::OutForDelivery | ShipmentStatus::Exception
+        ) | (
+            ShipmentStatus::OutForDelivery,
+            ShipmentStatus::Delivered | ShipmentStatus::Exception
+        ) | (ShipmentStatus::Exception, ShipmentStatus::Returned)
     )
 }
 
+#[must_use]
 pub fn order_eligible_for_logistics(order: &Order) -> bool {
-    matches!(*order.status(), OrderStatus::Paid | OrderStatus::Packed)
+    matches!(order.status(), OrderStatus::Paid | OrderStatus::Packed)
 }
 
 domain_struct! {
@@ -50,10 +57,12 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn cart_contains_sku(sku: Sku, items: &[CartLine]) -> bool {
-    items.iter().any(|line| *line.sku() == sku)
+    items.iter().any(|line| line.sku() == sku)
 }
 
+#[must_use]
 pub fn allocations_match_cart_skus(items: &[CartLine], allocations: &[Allocation]) -> bool {
     allocations
         .iter()
@@ -64,7 +73,7 @@ pub fn cart_sku_quantity_total(sku: Sku, items: &[CartLine]) -> DomainResult<Qua
     checked_sum(
         items
             .iter()
-            .filter(|line| *line.sku() == sku)
+            .filter(|line| line.sku() == sku)
             .map(CartLine::quantity),
         "cart_sku_quantity_total",
     )
@@ -84,9 +93,10 @@ pub fn allocation_sku_quantity_total(
 }
 
 pub fn cart_sku_support(items: &[CartLine]) -> Vec<Sku> {
-    items.iter().map(|line| *line.sku()).collect()
+    items.iter().map(CartLine::sku).collect()
 }
 
+#[must_use]
 pub fn allocation_sku_support(allocations: &[Allocation]) -> Vec<Sku> {
     allocations
         .iter()
@@ -94,6 +104,7 @@ pub fn allocation_sku_support(allocations: &[Allocation]) -> Vec<Sku> {
         .collect()
 }
 
+#[must_use]
 pub fn shipment_sku_quantity_support(items: &[CartLine], allocations: &[Allocation]) -> Vec<Sku> {
     let mut support = cart_sku_support(items);
     support.extend(allocation_sku_support(allocations));
@@ -126,10 +137,11 @@ pub fn allocation_quantities_match_cart_skus(
     )
 }
 
+#[must_use]
 pub fn allocations_use_warehouse(warehouse: &Warehouse, allocations: &[Allocation]) -> bool {
     allocations
         .iter()
-        .all(|allocation| allocation.node.warehouse.id == *warehouse.id())
+        .all(|allocation| allocation.node.warehouse.id == warehouse.id())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -162,7 +174,7 @@ impl LogisticsShipmentPlan {
         if !order_eligible_for_logistics(&order) {
             return Err(ValidationError::LogisticsInvariantFailed);
         }
-        if *fulfillment.requested() != cart_quantity_total(order.items())? {
+        if fulfillment.requested() != cart_quantity_total(order.items())? {
             return Err(ValidationError::LogisticsInvariantFailed);
         }
         if !allocations_match_cart_skus(order.items(), fulfillment.allocations()) {
@@ -289,36 +301,24 @@ pub enum TrackingEventKind {
     ReturnScan,
 }
 
-pub fn can_tracking_progress(source: TrackingEventKind, target: TrackingEventKind) -> bool {
+#[must_use]
+pub const fn can_tracking_progress(source: TrackingEventKind, target: TrackingEventKind) -> bool {
     matches!(
         (source, target),
         (
             TrackingEventKind::LabelCreated,
-            TrackingEventKind::LabelCreated
+            TrackingEventKind::LabelCreated | TrackingEventKind::PickupScan
         ) | (
-            TrackingEventKind::LabelCreated,
             TrackingEventKind::PickupScan
-        ) | (
-            TrackingEventKind::PickupScan,
+                | TrackingEventKind::InTransitScan
+                | TrackingEventKind::ExceptionScan,
             TrackingEventKind::InTransitScan
         ) | (
             TrackingEventKind::InTransitScan,
-            TrackingEventKind::InTransitScan
-        ) | (
-            TrackingEventKind::InTransitScan,
-            TrackingEventKind::OutForDeliveryScan
-        ) | (
-            TrackingEventKind::InTransitScan,
-            TrackingEventKind::ExceptionScan
+            TrackingEventKind::OutForDeliveryScan | TrackingEventKind::ExceptionScan
         ) | (
             TrackingEventKind::OutForDeliveryScan,
-            TrackingEventKind::DeliveredScan
-        ) | (
-            TrackingEventKind::OutForDeliveryScan,
-            TrackingEventKind::ExceptionScan
-        ) | (
-            TrackingEventKind::ExceptionScan,
-            TrackingEventKind::InTransitScan
+            TrackingEventKind::DeliveredScan | TrackingEventKind::ExceptionScan
         ) | (
             TrackingEventKind::ExceptionScan,
             TrackingEventKind::ReturnScan
@@ -337,6 +337,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn tracking_events_monotone_from(last: Timestamp, events: &[TrackingEvent]) -> bool {
     let mut cursor = last;
     for event in events {
@@ -348,10 +349,12 @@ pub fn tracking_events_monotone_from(last: Timestamp, events: &[TrackingEvent]) 
     true
 }
 
+#[must_use]
 pub fn tracking_events_for_shipment(shipment_id: ShipmentId, events: &[TrackingEvent]) -> bool {
     events.iter().all(|event| event.shipment_id == shipment_id)
 }
 
+#[must_use]
 pub fn tracking_events_for_carrier(
     carrier_id: Id,
     tracking_number: Id,
@@ -362,15 +365,18 @@ pub fn tracking_events_for_carrier(
         .all(|event| event.carrier_id == carrier_id && event.tracking_number == tracking_number)
 }
 
+#[must_use]
 pub fn tracking_last_observed_from(last: Timestamp, events: &[TrackingEvent]) -> Timestamp {
     events.last().map_or(last, |event| event.occurred_at)
 }
 
+#[must_use]
 pub fn tracking_event_ids_distinct(events: &[TrackingEvent]) -> bool {
     let mut seen = HashSet::new();
     events.iter().all(|event| seen.insert(event.id.value()))
 }
 
+#[must_use]
 pub fn tracking_events_progress_from(
     last_kind: TrackingEventKind,
     events: &[TrackingEvent],
@@ -438,6 +444,7 @@ impl DeliveryPromise {
     }
 }
 
+#[must_use]
 pub fn delivered_by_promise(promise: &DeliveryPromise, delivered_at: Timestamp) -> bool {
     delivered_at <= promise.promised_by
 }
@@ -557,7 +564,8 @@ pub enum ReturnAuthorizationStatus {
     Closed,
 }
 
-pub fn can_return_authorization_transition(
+#[must_use]
+pub const fn can_return_authorization_transition(
     source: ReturnAuthorizationStatus,
     target: ReturnAuthorizationStatus,
 ) -> bool {
@@ -565,10 +573,7 @@ pub fn can_return_authorization_transition(
         (source, target),
         (
             ReturnAuthorizationStatus::Requested,
-            ReturnAuthorizationStatus::Approved
-        ) | (
-            ReturnAuthorizationStatus::Requested,
-            ReturnAuthorizationStatus::Rejected
+            ReturnAuthorizationStatus::Approved | ReturnAuthorizationStatus::Rejected
         ) | (
             ReturnAuthorizationStatus::Approved,
             ReturnAuthorizationStatus::Received
@@ -604,6 +609,7 @@ pub fn return_lines_refund_total(lines: &[ReturnLine]) -> DomainResult<Money> {
     )
 }
 
+#[must_use]
 pub fn return_lines_match_order_skus(items: &[CartLine], lines: &[ReturnLine]) -> bool {
     lines.iter().all(|line| cart_contains_sku(line.sku, items))
 }
@@ -663,6 +669,7 @@ impl ReturnAuthorization {
     }
 }
 
+#[must_use]
 pub fn return_authorization_approved(authorization: &ReturnAuthorization) -> bool {
     authorization.status == ReturnAuthorizationStatus::Approved
 }

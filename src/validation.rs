@@ -2,7 +2,7 @@
 
 use crate::*;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawCartLine {
     pub sku: Sku,
@@ -25,19 +25,21 @@ pub fn validate_cart_line(raw: RawCartLine) -> Result<CartLine, ValidationError>
     .map_err(|_| ValidationError::LineDiscountExceedsGross)
 }
 
+#[must_use]
 pub fn cart_line_matches_raw(raw: &RawCartLine, line: &CartLine) -> bool {
-    *line.sku() == raw.sku
-        && *line.price() == raw.price
-        && *line.cost() == raw.cost
+    line.sku() == raw.sku
+        && line.price() == raw.price
+        && line.cost() == raw.cost
         && line.quantity() == raw.quantity
-        && *line.discount() == raw.discount
-        && *line.weight() == raw.weight
+        && line.discount() == raw.discount
+        && line.weight() == raw.weight
 }
 
 pub fn validate_cart_lines(raw: Vec<RawCartLine>) -> Result<Vec<CartLine>, ValidationError> {
     raw.into_iter().map(validate_cart_line).collect()
 }
 
+#[must_use]
 pub fn cart_lines_match_raw(raw: &[RawCartLine], lines: &[CartLine]) -> bool {
     raw.len() == lines.len()
         && raw
@@ -83,18 +85,19 @@ pub fn validate_order(raw: RawOrder) -> Result<Order, ValidationError> {
     )
 }
 
+#[must_use]
 pub fn order_matches_raw(raw: &RawOrder, order: &Order) -> bool {
     order.id() == raw.id
         && cart_lines_match_raw(&raw.items, order.items())
-        && *order.coupon_amount() == raw.coupon_amount
+        && order.coupon_amount() == raw.coupon_amount
         && order.shipping_method() == &raw.shipping_method
         && order.tax() == raw.tax
         && order.currency() == raw.currency
-        && order.status() == &raw.status
+        && order.status() == raw.status
         && order.total() == raw.total
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawStockState {
     pub sku: Sku,
@@ -107,7 +110,7 @@ pub fn validate_stock_state(raw: RawStockState) -> Result<StockState, Validation
         .map_err(|_| ValidationError::StockReservedExceedsTotal)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawChannelPricePolicy {
     pub min_price: Money,
@@ -121,7 +124,7 @@ pub fn validate_channel_price_policy(
         .map_err(|_| ValidationError::PricePolicyInvalid)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawProductFeedLine {
     pub sku: Sku,
@@ -156,7 +159,7 @@ pub fn validate_feed_line(raw: RawProductFeedLine) -> Result<SafeProductFeedLine
     )
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawPaymentLedger {
     pub captured: Money,
@@ -168,7 +171,7 @@ pub fn validate_payment_ledger(raw: RawPaymentLedger) -> Result<PaymentLedger, V
         .map_err(|_| ValidationError::LedgerRefundedExceedsCaptured)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawRefund {
     pub amount: Money,
@@ -182,11 +185,13 @@ pub struct ValidRefund {
 }
 
 impl ValidRefund {
-    pub fn ledger(&self) -> &PaymentLedger {
+    #[must_use]
+    pub const fn ledger(&self) -> &PaymentLedger {
         &self.ledger
     }
 
-    pub fn amount(&self) -> Money {
+    #[must_use]
+    pub const fn amount(&self) -> Money {
         self.amount
     }
 }
@@ -244,8 +249,12 @@ pub fn validate_pick_task(
     PickTask::try_new(sku, requested, bin).map_err(|_| ValidationError::InventoryInvariantFailed)
 }
 
-pub fn validate_pack_task(picked: Quantity, packed: Quantity) -> Result<PackTask, ValidationError> {
-    PackTask::try_new(picked, packed).map_err(|_| ValidationError::InventoryInvariantFailed)
+pub fn validate_pack_task(
+    source_quantity: Quantity,
+    packed_quantity: Quantity,
+) -> Result<PackTask, ValidationError> {
+    PackTask::try_new(source_quantity, packed_quantity)
+        .map_err(|_| ValidationError::InventoryInvariantFailed)
 }
 
 pub fn validate_warehouse_shipment(
@@ -279,7 +288,7 @@ pub fn validate_distinct_fulfillment_plan(
         .map_err(|_| ValidationError::InventoryInvariantFailed)
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RawReservationAttempt {
     pub stock: RawStockState,
@@ -312,9 +321,9 @@ pub fn validate_raw_compare_and_swap_reservation(
 ) -> Result<VersionedStock, ValidationError> {
     let attempt = validate_raw_reservation_attempt(raw)?;
     validate_compare_and_swap_reservation(
-        attempt.stock().clone(),
-        *attempt.quantity(),
-        *attempt.expected_version(),
+        attempt.stock(),
+        attempt.quantity(),
+        attempt.expected_version(),
     )
 }
 
@@ -422,7 +431,7 @@ pub fn validate_split_fulfillment_plan(
         .map_err(|_| ValidationError::InventoryInvariantFailed)
 }
 
-pub fn validate_typed_order<S: OrderStatusMarker>(
+pub const fn validate_typed_order<S: OrderStatusMarker>(
     id: OrderId,
     total: Money,
     currency: Currency,
@@ -430,7 +439,7 @@ pub fn validate_typed_order<S: OrderStatusMarker>(
     TypedOrder::try_new(id, total, currency)
 }
 
-pub fn validate_typed_payment<S: PaymentStateMarker>(
+pub const fn validate_typed_payment<S: PaymentStateMarker>(
     id: PaymentId,
     order_id: OrderId,
     amount: Money,
@@ -1501,7 +1510,7 @@ pub fn validate_captured_payment_journal_projection(
     accounts: AccountingAccounts,
     payment: CapturedPayment,
 ) -> Result<CapturedPaymentJournalProjection, ValidationError> {
-    let journal = payment_captured_journal(&accounts, *payment.amount())
+    let journal = payment_captured_journal(&accounts, payment.amount())
         .map_err(|_| ValidationError::ImplicitInvariantFailed)?;
     CapturedPaymentJournalProjection::try_new(accounts, payment, journal)
         .map_err(|_| ValidationError::ImplicitInvariantFailed)

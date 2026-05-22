@@ -42,14 +42,17 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn listing_active(listing: &MarketplaceListing) -> bool {
     listing.status == ListingStatus::Active
 }
 
-pub fn listing_in_stock(listing: &MarketplaceListing) -> bool {
+#[must_use]
+pub const fn listing_in_stock(listing: &MarketplaceListing) -> bool {
     listing.published_stock > 0
 }
 
+#[must_use]
 pub fn listing_can_be_advertised(listing: &MarketplaceListing) -> bool {
     listing_active(listing) && listing_in_stock(listing)
 }
@@ -76,7 +79,8 @@ impl SyncedMarketplaceListing {
         Ok(Self { listing, stock })
     }
 
-    pub fn listing(&self) -> &MarketplaceListing {
+    #[must_use]
+    pub const fn listing(&self) -> &MarketplaceListing {
         &self.listing
     }
 }
@@ -89,7 +93,7 @@ pub struct ChannelPricePolicy {
 }
 
 impl ChannelPricePolicy {
-    pub fn try_new(min_price: Money, max_price: Money) -> DomainResult<Self> {
+    pub const fn try_new(min_price: Money, max_price: Money) -> DomainResult<Self> {
         if min_price > max_price {
             return Err(ValidationError::Invariant("minimum price exceeds maximum"));
         }
@@ -100,7 +104,8 @@ impl ChannelPricePolicy {
     }
 }
 
-pub fn valid_channel_price(policy: &ChannelPricePolicy, price: Money) -> bool {
+#[must_use]
+pub const fn valid_channel_price(policy: &ChannelPricePolicy, price: Money) -> bool {
     policy.min_price <= price && price <= policy.max_price
 }
 

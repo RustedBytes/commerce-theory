@@ -9,7 +9,7 @@ pub struct BrandPricingPolicy {
 }
 
 impl BrandPricingPolicy {
-    pub fn try_new(map_price: Money, msrp: Money) -> DomainResult<Self> {
+    pub const fn try_new(map_price: Money, msrp: Money) -> DomainResult<Self> {
         if map_price > msrp {
             return Err(ValidationError::Invariant("MAP exceeds MSRP"));
         }
@@ -17,7 +17,11 @@ impl BrandPricingPolicy {
     }
 }
 
-pub fn advertised_price_allowed(policy: &BrandPricingPolicy, advertised_price: Money) -> bool {
+#[must_use]
+pub const fn advertised_price_allowed(
+    policy: &BrandPricingPolicy,
+    advertised_price: Money,
+) -> bool {
     policy.map_price <= advertised_price
 }
 
@@ -30,7 +34,7 @@ pub struct BundleComponent {
 }
 
 impl BundleComponent {
-    pub fn try_new(
+    pub const fn try_new(
         sku: Sku,
         units_per_bundle: Quantity,
         stock_available: Quantity,
@@ -75,16 +79,12 @@ pub struct BundleReservation {
 
 impl BundleReservation {
     pub fn try_new(bundle_qty: Quantity, components: Vec<BundleComponent>) -> DomainResult<Self> {
-        if components
-            .iter()
-            .map(|component| component_can_fulfill_bundles(bundle_qty, component))
-            .collect::<DomainResult<Vec<_>>>()?
-            .into_iter()
-            .any(|ok| !ok)
-        {
-            return Err(ValidationError::Invariant(
-                "bundle component cannot fulfill reservation",
-            ));
+        for component in &components {
+            if !component_can_fulfill_bundles(bundle_qty, component)? {
+                return Err(ValidationError::Invariant(
+                    "bundle component cannot fulfill reservation",
+                ));
+            }
         }
         Ok(Self {
             bundle_qty,
@@ -111,7 +111,7 @@ pub struct AcceptedPromotionSet {
 }
 
 impl AcceptedPromotionSet {
-    pub fn try_new(
+    pub const fn try_new(
         resulting_price: Money,
         total_discount: Money,
         discount_cap: Money,
@@ -134,7 +134,8 @@ impl AcceptedPromotionSet {
     }
 }
 
-pub fn promotion_set_allowed_by_policy(
+#[must_use]
+pub const fn promotion_set_allowed_by_policy(
     policy: PromotionStackingPolicy,
     promotion_count: Nat,
     set: &AcceptedPromotionSet,
@@ -162,7 +163,7 @@ pub struct ValidSearchResultItem {
 }
 
 impl ValidSearchResultItem {
-    pub fn try_new(item: SearchResultItem) -> DomainResult<Self> {
+    pub const fn try_new(item: SearchResultItem) -> DomainResult<Self> {
         if item.archived || !item.in_stock || !item.margin_safe {
             return Err(ValidationError::Invariant("search result is not safe"));
         }
@@ -170,7 +171,7 @@ impl ValidSearchResultItem {
     }
 }
 
-pub(crate) fn _competitor_anchor(_: Option<TrustLevel>) {}
+pub(crate) const fn _competitor_anchor(_: Option<TrustLevel>) {}
 
 impl_getters!(BrandPricingPolicy {
     map_price: Money,

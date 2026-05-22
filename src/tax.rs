@@ -31,6 +31,7 @@ pub enum TaxTreatment {
     ReverseCharge,
 }
 
+#[must_use]
 pub fn seller_collects_tax_for_treatment(treatment: TaxTreatment) -> bool {
     treatment == TaxTreatment::Taxable
 }
@@ -264,6 +265,7 @@ impl TaxExemptionCertificate {
     }
 }
 
+#[must_use]
 pub fn certificate_valid_at(certificate: &TaxExemptionCertificate, now: Timestamp) -> bool {
     certificate.valid_from <= now && now <= certificate.valid_until
 }
@@ -300,7 +302,8 @@ impl B2BTaxExemption {
     }
 }
 
-pub fn seller_tax_due_for_facilitator(facilitator_collects: bool, tax: Money) -> Money {
+#[must_use]
+pub const fn seller_tax_due_for_facilitator(facilitator_collects: bool, tax: Money) -> Money {
     if facilitator_collects { 0 } else { tax }
 }
 
@@ -361,17 +364,17 @@ pub fn invoice_line_floor_tax_rounding_remainder(line: &TaxInvoiceLine) -> Domai
 pub fn invoice_lines_floor_tax_rounding_remainder_total(
     lines: &[TaxInvoiceLine],
 ) -> DomainResult<Nat> {
-    let numerators = lines
-        .iter()
-        .map(|line| {
+    checked_result_sum(
+        lines.iter().map(|line| {
             checked_mul(
                 line.taxable_amount,
                 line.rate.bps().value(),
                 "invoice lines tax remainder",
             )
-        })
-        .collect::<DomainResult<Vec<_>>>()?;
-    floor_rounded_lines_remainder_total(10_000, &numerators)
+            .and_then(|numerator| floor_rounding_remainder(numerator, 10_000))
+        }),
+        "floor_rounded_lines_remainder_total",
+    )
 }
 
 impl_getters!(TaxInclusivePrice {

@@ -21,15 +21,20 @@ pub enum CRMAccountStatus {
     Closed,
 }
 
-pub fn can_crm_account_transition(source: CRMAccountStatus, target: CRMAccountStatus) -> bool {
+#[must_use]
+pub const fn can_crm_account_transition(
+    source: CRMAccountStatus,
+    target: CRMAccountStatus,
+) -> bool {
     matches!(
         (source, target),
-        (CRMAccountStatus::Prospect, CRMAccountStatus::Active)
-            | (CRMAccountStatus::Prospect, CRMAccountStatus::Closed)
-            | (CRMAccountStatus::Active, CRMAccountStatus::Paused)
-            | (CRMAccountStatus::Active, CRMAccountStatus::Closed)
-            | (CRMAccountStatus::Paused, CRMAccountStatus::Active)
-            | (CRMAccountStatus::Paused, CRMAccountStatus::Closed)
+        (
+            CRMAccountStatus::Prospect | CRMAccountStatus::Paused,
+            CRMAccountStatus::Active
+        ) | (
+            CRMAccountStatus::Prospect | CRMAccountStatus::Active | CRMAccountStatus::Paused,
+            CRMAccountStatus::Closed
+        ) | (CRMAccountStatus::Active, CRMAccountStatus::Paused)
     )
 }
 
@@ -45,7 +50,7 @@ pub struct CRMAccount {
 }
 
 impl CRMAccount {
-    pub fn try_new(
+    pub const fn try_new(
         id: AccountId,
         customer: Customer,
         tier: AccountTier,
@@ -67,6 +72,7 @@ impl CRMAccount {
     }
 }
 
+#[must_use]
 pub fn crm_account_active(account: &CRMAccount) -> bool {
     account.status == CRMAccountStatus::Active
 }
@@ -86,7 +92,7 @@ impl ActiveCRMAccount {
     }
 }
 
-pub fn transition_crm_account(
+pub const fn transition_crm_account(
     account: CRMAccount,
     next: CRMAccountStatus,
 ) -> DomainResult<CRMAccount> {
@@ -122,12 +128,13 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn contact_can_receive_marketing(contact: &CRMContact) -> bool {
     can_send_marketing_message(contact.subscription)
         && can_retarget(contact.retargeting_consent)
         && data_processing_allowed(&contact.data_permission)
-        && contact.data_permission.purpose() == &ConsentPurpose::Marketing
-        && contact.data_permission.basis() == &ProcessingBasis::Consent
+        && contact.data_permission.purpose() == ConsentPurpose::Marketing
+        && contact.data_permission.basis() == ProcessingBasis::Consent
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -272,19 +279,24 @@ pub enum LeadStatus {
     Converted,
 }
 
-pub fn can_lead_transition(source: LeadStatus, target: LeadStatus) -> bool {
+#[must_use]
+pub const fn can_lead_transition(source: LeadStatus, target: LeadStatus) -> bool {
     matches!(
         (source, target),
-        (LeadStatus::New, LeadStatus::Working)
-            | (LeadStatus::New, LeadStatus::Disqualified)
-            | (LeadStatus::Working, LeadStatus::Qualified)
-            | (LeadStatus::Working, LeadStatus::Disqualified)
-            | (LeadStatus::Qualified, LeadStatus::Converted)
-            | (LeadStatus::Qualified, LeadStatus::Disqualified)
+        (
+            LeadStatus::New,
+            LeadStatus::Working | LeadStatus::Disqualified
+        ) | (
+            LeadStatus::Working,
+            LeadStatus::Qualified | LeadStatus::Disqualified
+        ) | (
+            LeadStatus::Qualified,
+            LeadStatus::Converted | LeadStatus::Disqualified
+        )
     )
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Lead {
     pub(crate) id: LeadId,
@@ -371,21 +383,31 @@ pub enum OpportunityStage {
     Lost,
 }
 
-pub fn can_opportunity_transition(source: OpportunityStage, target: OpportunityStage) -> bool {
+#[must_use]
+pub const fn can_opportunity_transition(
+    source: OpportunityStage,
+    target: OpportunityStage,
+) -> bool {
     matches!(
         (source, target),
-        (OpportunityStage::Prospecting, OpportunityStage::Qualified)
-            | (OpportunityStage::Prospecting, OpportunityStage::Lost)
-            | (OpportunityStage::Qualified, OpportunityStage::Proposal)
-            | (OpportunityStage::Qualified, OpportunityStage::Lost)
-            | (OpportunityStage::Proposal, OpportunityStage::Negotiation)
-            | (OpportunityStage::Proposal, OpportunityStage::Lost)
-            | (OpportunityStage::Negotiation, OpportunityStage::Won)
-            | (OpportunityStage::Negotiation, OpportunityStage::Lost)
+        (
+            OpportunityStage::Prospecting,
+            OpportunityStage::Qualified | OpportunityStage::Lost
+        ) | (
+            OpportunityStage::Qualified,
+            OpportunityStage::Proposal | OpportunityStage::Lost
+        ) | (
+            OpportunityStage::Proposal,
+            OpportunityStage::Negotiation | OpportunityStage::Lost
+        ) | (
+            OpportunityStage::Negotiation,
+            OpportunityStage::Won | OpportunityStage::Lost
+        )
     )
 }
 
-pub fn opportunity_stage_probability_allowed(
+#[must_use]
+pub const fn opportunity_stage_probability_allowed(
     stage: OpportunityStage,
     probability: BasisPoints,
 ) -> bool {
@@ -396,7 +418,7 @@ pub fn opportunity_stage_probability_allowed(
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SalesOpportunity {
     pub(crate) id: OpportunityId,
@@ -508,15 +530,13 @@ pub fn opportunity_gross_value(opportunities: &[SalesOpportunity]) -> DomainResu
 }
 
 pub fn opportunity_weighted_value_total(opportunities: &[SalesOpportunity]) -> DomainResult<Money> {
-    checked_sum(
-        opportunities
-            .iter()
-            .map(opportunity_weighted_value)
-            .collect::<DomainResult<Vec<_>>>()?,
+    checked_result_sum(
+        opportunities.iter().map(opportunity_weighted_value),
         "opportunity_weighted_value_total",
     )
 }
 
+#[must_use]
 pub fn opportunities_use_currency(currency: Currency, opportunities: &[SalesOpportunity]) -> bool {
     opportunities
         .iter()
@@ -609,39 +629,32 @@ pub enum SupportCaseStatus {
     Closed,
 }
 
-pub fn can_support_case_transition(source: SupportCaseStatus, target: SupportCaseStatus) -> bool {
+#[must_use]
+pub const fn can_support_case_transition(
+    source: SupportCaseStatus,
+    target: SupportCaseStatus,
+) -> bool {
     matches!(
         (source, target),
         (
             SupportCaseStatus::Opened,
             SupportCaseStatus::WaitingOnCustomer
+                | SupportCaseStatus::WaitingOnInternal
+                | SupportCaseStatus::Escalated
+                | SupportCaseStatus::Resolved
         ) | (
-            SupportCaseStatus::Opened,
-            SupportCaseStatus::WaitingOnInternal
-        ) | (SupportCaseStatus::Opened, SupportCaseStatus::Escalated)
-            | (SupportCaseStatus::Opened, SupportCaseStatus::Resolved)
-            | (
-                SupportCaseStatus::WaitingOnCustomer,
-                SupportCaseStatus::Resolved
-            )
-            | (
-                SupportCaseStatus::WaitingOnCustomer,
-                SupportCaseStatus::Escalated
-            )
-            | (
-                SupportCaseStatus::WaitingOnInternal,
-                SupportCaseStatus::Resolved
-            )
-            | (
-                SupportCaseStatus::WaitingOnInternal,
-                SupportCaseStatus::Escalated
-            )
-            | (SupportCaseStatus::Escalated, SupportCaseStatus::Resolved)
-            | (SupportCaseStatus::Resolved, SupportCaseStatus::Closed)
+            SupportCaseStatus::WaitingOnCustomer
+                | SupportCaseStatus::WaitingOnInternal
+                | SupportCaseStatus::Escalated,
+            SupportCaseStatus::Resolved
+        ) | (
+            SupportCaseStatus::WaitingOnCustomer | SupportCaseStatus::WaitingOnInternal,
+            SupportCaseStatus::Escalated
+        ) | (SupportCaseStatus::Resolved, SupportCaseStatus::Closed)
     )
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SupportCase {
     pub(crate) id: SupportCaseId,
@@ -762,8 +775,8 @@ impl RetentionOffer {
         if !crm_account_active(&account)
             || !coupon_can_be_applied(&coupon, account.lifetime_value, uses_before)
             || account.lifetime_value < segment.min_lifetime_value
-            || discount > *coupon.amount()
-            || *coupon.amount() > account.lifetime_value
+            || discount > coupon.amount()
+            || coupon.amount() > account.lifetime_value
             || discount > segment.max_retention_discount
         {
             return Err(ValidationError::CrmInvariantFailed);

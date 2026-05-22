@@ -9,7 +9,7 @@ pub struct Timed<T> {
 }
 
 impl<T> Timed<T> {
-    pub fn new(ret: T, time: Nat) -> Self {
+    pub const fn new(ret: T, time: Nat) -> Self {
         Self { ret, time }
     }
 }
@@ -42,13 +42,15 @@ impl WebhookOrderingStep {
         })
     }
 
-    pub fn before(&self) -> &WebhookOrderingState {
+    #[must_use]
+    pub const fn before(&self) -> &WebhookOrderingState {
         match self {
             Self::Accept { before, .. } => before,
         }
     }
 
-    pub fn after(&self) -> &WebhookOrderingState {
+    #[must_use]
+    pub const fn after(&self) -> &WebhookOrderingState {
         match self {
             Self::Accept { after, .. } => after,
         }
@@ -368,7 +370,8 @@ impl ValidDomainEventStep {
         }
     }
 
-    pub fn event(&self) -> &DomainEvent {
+    #[must_use]
+    pub const fn event(&self) -> &DomainEvent {
         match self {
             Self::StockReserved { event, .. }
             | Self::RefundIssued { event, .. }
@@ -380,7 +383,8 @@ impl ValidDomainEventStep {
         }
     }
 
-    pub fn before(&self) -> &ValidSystemState {
+    #[must_use]
+    pub const fn before(&self) -> &ValidSystemState {
         match self {
             Self::StockReserved { before, .. }
             | Self::RefundIssued { before, .. }
@@ -392,7 +396,8 @@ impl ValidDomainEventStep {
         }
     }
 
-    pub fn after(&self) -> &ValidSystemState {
+    #[must_use]
+    pub const fn after(&self) -> &ValidSystemState {
         match self {
             Self::StockReserved { after, .. }
             | Self::RefundIssued { after, .. }

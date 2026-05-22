@@ -23,16 +23,27 @@ pub struct DecimalMoney {
 }
 
 impl DecimalMoney {
+    #[must_use]
     pub const fn new(coefficient: SignedMoney, scale: Nat) -> Self {
         Self { coefficient, scale }
     }
 
+    #[must_use]
     pub const fn coefficient(&self) -> SignedMoney {
         self.coefficient
     }
 
+    #[must_use]
     pub const fn scale(&self) -> Nat {
         self.scale
+    }
+}
+
+impl crate::FieldAccess for DecimalMoney {
+    type Output<'a> = Self;
+
+    fn access(&self) -> Self::Output<'_> {
+        *self
     }
 }
 
@@ -144,10 +155,21 @@ where
         .try_fold(0, |acc, item| checked_add(acc, item, context))
 }
 
+pub(crate) fn checked_result_sum<I>(items: I, context: &'static str) -> DomainResult<Nat>
+where
+    I: IntoIterator<Item = DomainResult<Nat>>,
+{
+    items
+        .into_iter()
+        .try_fold(0, |acc, item| checked_add(acc, item?, context))
+}
+
+#[must_use]
 pub const fn nat_sub(a: Nat, b: Nat) -> Nat {
     a.saturating_sub(b)
 }
 
+#[must_use]
 pub fn timestamp_from_ymdhms(
     year: i32,
     month: u8,
@@ -162,14 +184,23 @@ pub fn timestamp_from_ymdhms(
     Some(PrimitiveDateTime::new(date, time))
 }
 
+/// Returns the Unix epoch timestamp.
+///
+/// # Panics
+///
+/// Panics only if the literal Unix epoch date is invalid in `time`, which would indicate a
+/// broken timestamp construction invariant.
+#[must_use]
 pub fn unix_epoch_timestamp() -> Timestamp {
     timestamp_from_ymdhms(1970, 1, 1, 0, 0, 0).expect("valid unix epoch timestamp")
 }
 
+#[must_use]
 pub fn timestamp_age(now: Timestamp, observed_at: Timestamp) -> Duration {
     now - observed_at
 }
 
+#[must_use]
 pub fn days(n: Nat) -> Days {
     Duration::days(i64::try_from(n).unwrap_or(i64::MAX))
 }
@@ -211,7 +242,7 @@ pub fn round_money(mode: RoundingMode, numerator: Nat, denominator: Nat) -> Doma
     round_div(mode, numerator, denominator)
 }
 
-pub fn floor_rounding_remainder(numerator: Nat, denominator: Nat) -> DomainResult<Nat> {
+pub const fn floor_rounding_remainder(numerator: Nat, denominator: Nat) -> DomainResult<Nat> {
     if denominator == 0 {
         Err(ValidationError::DivisionByZero(
             "floor_rounding_remainder denominator",
@@ -225,11 +256,10 @@ pub fn floor_rounded_lines_remainder_total(
     denominator: Nat,
     numerators: &[Nat],
 ) -> DomainResult<Nat> {
-    checked_sum(
+    checked_result_sum(
         numerators
             .iter()
-            .map(|numerator| floor_rounding_remainder(*numerator, denominator))
-            .collect::<DomainResult<Vec<_>>>()?,
+            .map(|numerator| floor_rounding_remainder(*numerator, denominator)),
         "floor_rounded_lines_remainder_total",
     )
 }
@@ -243,16 +273,26 @@ macro_rules! id_type {
         }
 
         impl $name {
+            #[must_use]
             pub const fn new(value: Nat) -> Self {
                 Self { value }
             }
 
-            pub fn try_new(value: Nat) -> DomainResult<Self> {
+            pub const fn try_new(value: Nat) -> DomainResult<Self> {
                 Ok(Self::new(value))
             }
 
+            #[must_use]
             pub const fn value(self) -> Nat {
                 self.value
+            }
+        }
+
+        impl $crate::FieldAccess for $name {
+            type Output<'a> = Self;
+
+            fn access(&self) -> Self::Output<'_> {
+                *self
             }
         }
     };
@@ -318,6 +358,7 @@ pub struct MoneyIn<C: CurrencyMarker> {
 }
 
 impl<C: CurrencyMarker> MoneyIn<C> {
+    #[must_use]
     pub const fn new(amount: Money) -> Self {
         Self {
             amount,
@@ -325,14 +366,17 @@ impl<C: CurrencyMarker> MoneyIn<C> {
         }
     }
 
+    #[must_use]
     pub const fn zero() -> Self {
         Self::new(0)
     }
 
+    #[must_use]
     pub const fn amount(self) -> Money {
         self.amount
     }
 
+    #[must_use]
     pub const fn currency(self) -> Currency {
         C::CURRENCY
     }
@@ -345,8 +389,20 @@ impl<C: CurrencyMarker> MoneyIn<C> {
         )?))
     }
 
+    #[must_use]
     pub const fn saturating_sub(self, other: Self) -> Self {
         Self::new(nat_sub(self.amount, other.amount))
+    }
+}
+
+impl<C: CurrencyMarker> crate::FieldAccess for MoneyIn<C> {
+    type Output<'a>
+        = Self
+    where
+        C: 'a;
+
+    fn access(&self) -> Self::Output<'_> {
+        *self
     }
 }
 
@@ -357,6 +413,7 @@ domain_struct! {
     }
 }
 
+#[must_use]
 pub fn same_currency(a: &MoneyAmount, b: &MoneyAmount) -> bool {
     a.currency == b.currency
 }
@@ -368,7 +425,7 @@ pub struct BasisPoints {
 }
 
 impl BasisPoints {
-    pub fn try_new(value: Nat) -> DomainResult<Self> {
+    pub const fn try_new(value: Nat) -> DomainResult<Self> {
         if value <= 10_000 {
             Ok(Self { value })
         } else {
@@ -376,8 +433,17 @@ impl BasisPoints {
         }
     }
 
+    #[must_use]
     pub const fn value(self) -> Nat {
         self.value
+    }
+}
+
+impl crate::FieldAccess for BasisPoints {
+    type Output<'a> = Self;
+
+    fn access(&self) -> Self::Output<'_> {
+        *self
     }
 }
 
@@ -397,7 +463,8 @@ pub fn round_bps_amount(mode: RoundingMode, amount: Money, bp: BasisPoints) -> D
     )
 }
 
-pub fn profit_amount(revenue: Money, total_costs: Money) -> Money {
+#[must_use]
+pub const fn profit_amount(revenue: Money, total_costs: Money) -> Money {
     nat_sub(revenue, total_costs)
 }
 

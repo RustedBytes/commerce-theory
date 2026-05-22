@@ -4,7 +4,8 @@ use crate::opportunity_portfolio::*;
 
 pub type OpportunityRankKey = Money;
 
-pub fn opportunity_rank_key(candidate: &DropshipOpportunityCandidate) -> OpportunityRankKey {
+#[must_use]
+pub const fn opportunity_rank_key(candidate: &DropshipOpportunityCandidate) -> OpportunityRankKey {
     candidate.expected_profit()
 }
 
@@ -14,6 +15,7 @@ pub fn opportunity_rank_keys(
     candidates.iter().map(opportunity_rank_key).collect()
 }
 
+#[must_use]
 pub fn rank_opportunity_keys(
     candidates: &[DropshipOpportunityCandidate],
 ) -> Timed<Vec<OpportunityRankKey>> {
