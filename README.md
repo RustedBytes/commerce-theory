@@ -106,6 +106,21 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --all-features --no-deps
 ```
 
+LLVM coverage is enforced at a minimum 80% line coverage. Install
+`cargo-llvm-cov` if needed, then run:
+
+```bash
+cargo llvm-cov --all-features --summary-only --fail-under-lines 80
+# or
+make coverage
+```
+
+For a local HTML report:
+
+```bash
+make coverage-html
+```
+
 ## Crate Layout
 
 - `src/foundation.rs`: shared IDs, units, money, currencies, validation errors
