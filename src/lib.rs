@@ -203,6 +203,27 @@ pub use tax::*;
 pub use validation::*;
 pub use workflow::*;
 
+#[cfg(test)]
+mod coverage_anchor_tests {
+    use super::*;
+
+    #[test]
+    fn crate_private_anchor_functions_are_covered() {
+        let stock = StockState::try_new(Sku::new(1), 1, 0).unwrap();
+
+        crate::b2b::_marketing_anchor(None);
+        crate::dropship_profit::_dropshipping_anchor(None);
+        crate::dropshipping::_b2b_anchor(None);
+        crate::event_sourcing::_risk_anchor(None);
+        crate::forecasting::_post_purchase_anchor(None);
+        crate::fulfillment_finance::_merchandising_anchor(None);
+        crate::merchandising::_competitor_anchor(None);
+        crate::opportunity_portfolio::_forecasting_anchor(None);
+        crate::post_purchase::_event_anchor(None);
+        crate::pricing::_inventory_anchor(&stock);
+    }
+}
+
 impl_copy_field_access!(
     AccountTier,
     Action,

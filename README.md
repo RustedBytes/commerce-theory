@@ -106,11 +106,11 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo doc --all-features --no-deps
 ```
 
-LLVM coverage is enforced at a minimum 80% line coverage. Install
+LLVM coverage is enforced at a minimum 99% line coverage. Install
 `cargo-llvm-cov` if needed, then run:
 
 ```bash
-cargo llvm-cov --all-features --summary-only --fail-under-lines 80
+cargo llvm-cov --all-features --summary-only --fail-under-lines 99
 # or
 make coverage
 ```
